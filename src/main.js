@@ -2,9 +2,9 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const fs = require("fs/promises");
 const { spawn } = require("child_process");
-const crypto = require("crypto");
 const { AIAgent } = require("./ai-agent");
 const { PluginLoader } = require("./plugin-loader");
+const { analyzeBasic } = require("./analyze");
 
 let win;
 const agent = new AIAgent(loadConfig());
@@ -70,26 +70,8 @@ function runTool(cmd, args, opts = {}) {
 ipcMain.handle("tool:rz", (_e, { file, cmd }) => runTool("rz-bin", ["-q", "-c", cmd, file]));
 // Escaneo YARA (apt install yara)
 ipcMain.handle("tool:yara", (_e, { rules, file }) => runTool("yara", [rules, file]));
-
-// Análisis básico sin dependencias: cabeceras, entropía de Shannon, hashes
-ipcMain.handle("analyze:basic", async (_e, filePath) => {
-  const buf = await fs.readFile(filePath);
-  const isPE = buf.subarray(0, 2).toString("latin1") === "MZ";
-  const isELF = buf.subarray(0, 4).toString("hex") === "7f454c46";
-  const isScript = buf.subarray(0, 2).toString("latin1") === "#!";
-  const freq = new Array(256).fill(0);
-  for (const b of buf) freq[b]++;
-  let entropy = 0;
-  for (const f of freq) { if (!f) continue; const p = f / buf.length; entropy -= p * Math.log2(p); }
-  return {
-    size: buf.length,
-    type: isPE ? "PE/EXE" : isELF ? "ELF" : isScript ? "Script" : "desconocido",
-    entropy: Number(entropy.toFixed(3)),
-    packed: entropy > 7.2,
-    sha256: crypto.createHash("sha256").update(buf).digest("hex"),
-    md5: crypto.createHash("md5").update(buf).digest("hex")
-  };
-});
+// Análisis básico (módulo testeable src/analyze.js)
+ipcMain.handle("analyze:basic", (_e, filePath) => analyzeBasic(filePath));
 
 /* ---------- IPC: plugins ---------- */
 ipcMain.handle("plugins:list", () => plugins.list());
