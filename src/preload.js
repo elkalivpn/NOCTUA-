@@ -1,0 +1,26 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("noctua", {
+  fs: {
+    readFile: (p) => ipcRenderer.invoke("fs:readFile", p),
+    readBinary: (p) => ipcRenderer.invoke("fs:readBinary", p),
+    writeFile: (p, d) => ipcRenderer.invoke("fs:writeFile", p, d),
+    readDir: (p) => ipcRenderer.invoke("fs:readDir", p),
+    pickFile: () => ipcRenderer.invoke("fs:pickFile")
+  },
+  ai: {
+    chat: (prompt, context) => ipcRenderer.invoke("ai:chat", { prompt, context }),
+    describe: () => ipcRenderer.invoke("ai:describe"),
+    switchProvider: (provider) => ipcRenderer.invoke("ai:switchProvider", provider)
+  },
+  tools: {
+    rz: (file, cmd) => ipcRenderer.invoke("tool:rz", { file, cmd }),
+    yara: (rules, file) => ipcRenderer.invoke("tool:yara", { rules, file }),
+    analyzeBasic: (file) => ipcRenderer.invoke("analyze:basic", file),
+    onStream: (cb) => ipcRenderer.on("tool:stream", (_e, data) => cb(data))
+  },
+  plugins: {
+    list: () => ipcRenderer.invoke("plugins:list"),
+    toggle: (id) => ipcRenderer.invoke("plugins:toggle", id)
+  }
+});

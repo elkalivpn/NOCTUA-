@@ -1,0 +1,25 @@
+{
+  "name": "noctua-ide",
+  "version": "0.1.0",
+  "description": "NOCTUA — IDE avanzado de investigación de seguridad para Kali Linux",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --linux AppImage"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.noctua.ide",
+    "productName": "NOCTUA",
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development"
+    }
+  }
+}
