@@ -10,9 +10,9 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 - [x] Panel de hallazgos: cabecera con SHA-256 copiable, lista agrupada por severidad con filtro por fuente y búsqueda
 - [x] Prompt de triaje del agente: JSON estructurado, afirmaciones solo con evidencia del input, campo unknowns
 - [x] Tests con fixtures generados en runtime (PE sintético limpio/packer/injection)
+- [x] CSP estricta en el renderer: default-src 'self', sin scripts inline ni remotos, object-src 'none' (issue #4)
+- [x] Self-host de Monaco: servido desde renderer/vendor/monaco, copiado por postinstall, fuera del repo (issue #5)
 - [ ] Árbol de proyectos y terminal integrada (node-pty) — issue #3
-- [ ] CSP estricta en el renderer — issue #4
-- [ ] Self-host de Monaco (issue #5)
 
 ## v0.1 — completado
 - [x] Esqueleto Electron con IPC seguro, editor Monaco, agente IA configurable, análisis básico, puentes rizin/YARA, plugins con permisos, CI, MIT, ARCHITECTURE.md

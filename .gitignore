@@ -7,3 +7,4 @@ noctua.json
 __pycache__/
 sandbox-files/
 crash-*.bin
+renderer/vendor/
