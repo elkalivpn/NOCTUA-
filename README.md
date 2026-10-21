@@ -65,7 +65,7 @@ Nota de red: `npm install` descarga dependencias una √∫nica vez; a partir de ah√
 
 ## Agente IA
 
-Cree ```/.config/noctua/noctua.json```:
+Cree `~/.config/noctua/noctua.json`:
 
 ```json
 {
