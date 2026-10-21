@@ -11,12 +11,17 @@ contextBridge.exposeInMainWorld("noctua", {
   ai: {
     chat: (prompt, context) => ipcRenderer.invoke("ai:chat", { prompt, context }),
     describe: () => ipcRenderer.invoke("ai:describe"),
-    switchProvider: (provider) => ipcRenderer.invoke("ai:switchProvider", provider)
+    switchProvider: (provider) => ipcRenderer.invoke("ai:switchProvider", provider),
+    explain: (result) => ipcRenderer.invoke("ai:explain", result)
+  },
+  analysis: {
+    run: (p, opts) => ipcRenderer.invoke("analyze:run", p, opts),
+    basic: (p) => ipcRenderer.invoke("analyze:basic", p),
+    onProgress: (cb) => ipcRenderer.on("analyze:progress", (_e, s) => cb(s))
   },
   tools: {
     rz: (file, cmd) => ipcRenderer.invoke("tool:rz", { file, cmd }),
     yara: (rules, file) => ipcRenderer.invoke("tool:yara", { rules, file }),
-    analyzeBasic: (file) => ipcRenderer.invoke("analyze:basic", file),
     onStream: (cb) => ipcRenderer.on("tool:stream", (_e, data) => cb(data))
   },
   plugins: {

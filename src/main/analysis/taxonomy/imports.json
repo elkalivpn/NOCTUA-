@@ -1,0 +1,87 @@
+{
+  "api.process-injection": {
+    "severity": "high",
+    "title": "Imports asociados a inyección de proceso",
+    "apis": [
+      "VirtualAlloc",
+      "VirtualAllocEx",
+      "WriteProcessMemory",
+      "CreateRemoteThread",
+      "CreateRemoteThreadEx",
+      "NtWriteVirtualMemory",
+      "NtUnmapViewOfSection",
+      "QueueUserApc",
+      "SetWindowsHookEx"
+    ]
+  },
+  "api.persistence": {
+    "severity": "medium",
+    "title": "Imports asociados a persistencia",
+    "apis": [
+      "RegSetValue",
+      "RegSetValueEx",
+      "RegCreateKey",
+      "RegCreateKeyEx",
+      "RegCreateKeyExW",
+      "CreateService",
+      "StartService",
+      "WinExec",
+      "OpenSCManager"
+    ]
+  },
+  "api.network": {
+    "severity": "medium",
+    "title": "Imports de red y descarga remota",
+    "apis": [
+      "InternetOpen",
+      "InternetOpenA",
+      "InternetOpenW",
+      "InternetOpenUrl",
+      "InternetOpenUrlA",
+      "InternetOpenUrlW",
+      "HttpSendRequest",
+      "URLDownloadToFile",
+      "URLDownloadToFileA",
+      "WSAStartup",
+      "connect",
+      "send",
+      "recv",
+      "gethostbyname"
+    ]
+  },
+  "api.anti-debug": {
+    "severity": "medium",
+    "title": "Imports de anti-debugging / anti-análisis",
+    "apis": [
+      "IsDebuggerPresent",
+      "CheckRemoteDebuggerPresent",
+      "NtQueryInformationProcess",
+      "OutputDebugString",
+      "OutputDebugStringA",
+      "GetTickCount",
+      "QueryPerformanceCounter"
+    ]
+  },
+  "api.crypto": {
+    "severity": "low",
+    "title": "Imports de cifrado (Windows CryptoAPI/BCrypt)",
+    "apis": [
+      "CryptEncrypt",
+      "CryptDecrypt",
+      "CryptAcquireContext",
+      "BCryptEncrypt",
+      "BCryptDecrypt",
+      "CryptDeriveKey"
+    ]
+  },
+  "api.keylogging": {
+    "severity": "high",
+    "title": "Imports compatibles con keylogging",
+    "apis": [
+      "GetAsyncKeyState",
+      "GetKeyState",
+      "SetWindowsHookEx",
+      "GetForegroundWindow"
+    ]
+  }
+}

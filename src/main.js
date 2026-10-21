@@ -5,6 +5,7 @@ const { spawn } = require("child_process");
 const { AIAgent } = require("./ai-agent");
 const { PluginLoader } = require("./plugin-loader");
 const { analyzeBasic } = require("./analyze");
+const { runAnalysis } = require("./main/analysis");
 
 let win;
 const agent = new AIAgent(loadConfig());
@@ -53,8 +54,19 @@ ipcMain.handle("ai:chat", async (_e, { prompt, context }) =>
   agent.complete(prompt, agent.buildContext(context)));
 ipcMain.handle("ai:describe", () => agent.describe());
 ipcMain.handle("ai:switchProvider", (_e, provider) => { agent.setProvider(provider); return agent.describe(); });
+// Triaje: recibe el AnalysisResult del contrato, devuelve JSON estructurado.
+ipcMain.handle("ai:explain", (_e, result) => agent.explain(result));
 
-/* ---------- IPC: herramientas de análisis ---------- */
+/* ---------- IPC: análisis ---------- */
+// Flujo vertical v0.2: orquestador con workers + progreso por etapas.
+ipcMain.handle("analyze:run", async (_e, p, opts) =>
+  runAnalysis(p, {
+    yaraRules: opts?.yaraRules || null,
+    onProgress: (s) => win?.webContents.send("analyze:progress", s)
+  }));
+ipcMain.handle("analyze:basic", (_e, filePath) => analyzeBasic(filePath));
+
+/* ---------- IPC: herramientas directas ---------- */
 function runTool(cmd, args, opts = {}) {
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { timeout: 60000, ...opts });
@@ -65,13 +77,8 @@ function runTool(cmd, args, opts = {}) {
     p.on("close", (code) => resolve({ code, out, err }));
   });
 }
-
-// Análisis estático con rizin (apt install rizin)
 ipcMain.handle("tool:rz", (_e, { file, cmd }) => runTool("rz-bin", ["-q", "-c", cmd, file]));
-// Escaneo YARA (apt install yara)
 ipcMain.handle("tool:yara", (_e, { rules, file }) => runTool("yara", [rules, file]));
-// Análisis básico (módulo testeable src/analyze.js)
-ipcMain.handle("analyze:basic", (_e, filePath) => analyzeBasic(filePath));
 
 /* ---------- IPC: plugins ---------- */
 ipcMain.handle("plugins:list", () => plugins.list());

@@ -19,7 +19,39 @@
   .file { display: block; width: 100%; text-align: left; background: none; border: none; color: #94a3b8; font: inherit; font-size: 12px; padding: 3px 10px; cursor: pointer; border-radius: 4px; }
   .file:hover { background: #1e293b; }
   .file.active { background: #164e63; color: #67e8f9; }
-  #editor { flex: 1; min-width: 0; }
+  #editorArea { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+  #editor { flex: 1; min-height: 0; }
+  /* ---- Panel de análisis v0.2 ---- */
+  #analysis { position: absolute; inset: 0; background: #0b0e14; display: none; flex-direction: column; padding: 14px 18px; overflow: hidden; }
+  #analysis.open { display: flex; }
+  #an-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid #1c2230; }
+  #an-head .name { color: #67e8f9; font-size: 15px; }
+  #an-head .sha { color: #64748b; font-size: 11px; cursor: pointer; border-bottom: 1px dotted #475569; }
+  #an-head .sha:hover { color: #22d3ee; }
+  .sev { padding: 1px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; letter-spacing: 1px; }
+  .sev.critical { background: #7f1d1d; color: #fecaca; }
+  .sev.high { background: #7c2d12; color: #fed7aa; }
+  .sev.medium { background: #713f12; color: #fef08a; }
+  .sev.low { background: #0c4a6e; color: #bae6fd; }
+  .sev.info { background: #1e293b; color: #94a3b8; }
+  #an-filters { display: flex; gap: 6px; align-items: center; padding: 10px 0 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid #334155; background: none; color: #94a3b8; border-radius: 999px; padding: 2px 10px; font: inherit; font-size: 11px; cursor: pointer; }
+  .chip.on { background: #164e63; color: #67e8f9; border-color: #0e7490; }
+  #an-search { background: #0d1117; border: 1px solid #1c2230; color: #e2e8f0; border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 11px; width: 180px; margin-left: auto; }
+  #an-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+  .sev-group { margin: 8px 0 2px; color: #64748b; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+  .finding { border: 1px solid #1c2230; background: #0d1117; border-radius: 6px; padding: 8px 10px; margin: 5px 0; cursor: pointer; }
+  .finding:hover { border-color: #0e7490; }
+  .finding .t { color: #e2e8f0; font-size: 12px; }
+  .finding .d { color: #64748b; font-size: 11px; margin-top: 3px; }
+  .finding .meta { color: #475569; font-size: 10px; margin-top: 4px; }
+  #an-detail { border-top: 1px solid #1c2230; padding: 8px 0; color: #94a3b8; font-size: 12px; min-height: 46px; max-height: 120px; overflow-y: auto; }
+  #an-bottom { border-top: 1px solid #1c2230; padding: 10px 0 0; display: flex; gap: 8px; align-items: center; }
+  #btn-explain { background: #0e7490; color: white; border: none; border-radius: 6px; padding: 7px 14px; font: inherit; font-size: 12px; cursor: pointer; }
+  #btn-explain:disabled { opacity: .5; }
+  #explain-box { margin-top: 10px; border: 1px solid #1c2230; background: #0d1117; border-radius: 6px; padding: 10px; font-size: 12px; overflow-y: auto; max-height: 140px; display: none; }
+  #an-progress { height: 3px; background: #1c2230; border-radius: 2px; overflow: hidden; margin: 8px 0; }
+  #an-progress div { height: 100%; background: #22d3ee; width: 0; transition: width .2s; }
   #ai { width: 320px; background: #0d1117; border-left: 1px solid #1c2230; display: flex; flex-direction: column; }
   #ai-head { padding: 10px; border-bottom: 1px solid #1c2230; display: flex; gap: 6px; }
   #ai-head button { flex: 1; background: #1e293b; color: #94a3b8; border: 1px solid #334155; border-radius: 4px; padding: 5px; font: inherit; font-size: 11px; cursor: pointer; }
@@ -41,17 +73,41 @@
 </head>
 <body>
 <header>
-  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.1</span>
+  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.2</span>
   <span style="margin-left:auto; display:flex; gap:8px;">
     <span class="badge ok">sandbox listo</span>
     <span class="badge" id="provider-badge">cargando…</span>
     <button class="badge action" id="btn-open">Abrir fichero</button>
-    <button class="badge action" id="btn-analyze">Analizar</button>
+    <button class="badge action" id="btn-analyze">Analizar (v0.2)</button>
   </span>
 </header>
 <div class="wrap">
   <div id="sidebar"><h3>Workspace</h3><div id="filelist"></div><h3>Plugins</h3><div id="pluginlist"></div></div>
-  <div id="editor"></div>
+  <div id="editorArea">
+    <div id="editor"></div>
+    <div id="analysis">
+      <div id="an-head">
+        <span class="name" id="an-name">—</span>
+        <span class="badge" id="an-type">—</span>
+        <span class="sha" id="an-sha" title="clic para copiar">sha256</span>
+        <span id="an-risk"></span>
+        <button class="badge action" id="btn-close-analysis" style="margin-left:auto;">✕ volver al editor</button>
+      </div>
+      <div id="an-progress"><div></div></div>
+      <div id="an-filters">
+        <span style="color:#64748b;font-size:11px;">fuente:</span>
+        <div id="an-chips"></div>
+        <input id="an-search" placeholder="buscar en hallazgos…"/>
+      </div>
+      <div id="an-list"></div>
+      <div id="an-detail">Seleccione un hallazgo para ver su detalle y referencias.</div>
+      <div id="explain-box"></div>
+      <div id="an-bottom">
+        <button id="btn-explain">Explicar hallazgos (agente)</button>
+        <span style="color:#64748b;font-size:11px;">el agente recibe solo el JSON del triaje, nunca el binario</span>
+      </div>
+    </div>
+  </div>
   <div id="ai">
     <div id="ai-head">
       <button id="p-mistral" class="active">API Mistral</button>
@@ -68,6 +124,7 @@
   <div id="tabs"><button class="active">TERMINAL</button><button>SALIDA</button></div>
   <div id="terminal"></div>
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs/loader.js"></script>
 <script>
 const term = (text, cls) => {
@@ -81,15 +138,19 @@ const term = (text, cls) => {
 require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.0/min/vs" } });
 require(["vs/editor/editor.main"], function () {
   window.editor = monaco.editor.create(document.getElementById("editor"), {
-    value: "// Bienvenido a NOCTUA. Abra un fichero o un binario para analizarlo.",
+    value: "// Bienvenido a NOCTUA. Abra un fichero y pulse Analizar para el flujo v0.2.",
     language: "python", theme: "vs-dark", automaticLayout: true,
     fontFamily: "'JetBrains Mono', monospace", fontSize: 13
   });
   monaco.editor.defineTheme("noctua", { base: "vs-dark", inherit: true, rules: [], colors: { "editor.background": "#0b0e14" } });
   monaco.editor.setTheme("noctua");
 });
+
 const api = window.noctua;
 let activeFile = null;
+let lastResult = null;
+let sourceFilter = null;
+
 async function refreshProvider(desc) {
   document.getElementById("provider-badge").textContent = desc || await api.ai.describe();
 }
@@ -106,27 +167,174 @@ async function loadPlugins() {
   }
   if (!list.length) el.innerHTML = "<p style='color:#475569;font-size:11px;padding:4px 10px;'>Sin plugins instalados</p>";
 }
+
 document.getElementById("btn-open").onclick = async () => {
   const p = await api.fs.pickFile();
   if (!p) return;
   activeFile = p;
-  const content = await api.fs.readFile(p);
-  if (window.editor) {
-    window.editor.setValue(content);
-    const lang = p.endsWith(".py") ? "python" : p.endsWith(".js") ? "javascript" : p.endsWith(".md") ? "markdown" : "plaintext";
-    monaco.editor.setModelLanguage(window.editor.getModel(), lang);
-  }
+  try {
+    const content = await api.fs.readFile(p);
+    if (window.editor) {
+      window.editor.setValue(content);
+      const lang = p.endsWith(".py") ? "python" : p.endsWith(".js") ? "javascript" : p.endsWith(".md") ? "markdown" : "plaintext";
+      monaco.editor.setModelLanguage(window.editor.getModel(), lang);
+    }
+  } catch (e) { term("binario o no-UTF8: solo análisis (" + e.message + ")", "err"); }
   term("abierto: " + p, "info");
 };
+
+/* ---------- Flujo vertical v0.2 ---------- */
+api.analysis.onProgress((s) => {
+  const bar = document.querySelector("#an-progress div");
+  bar.style.width = s.pct + "%";
+  term("[analyze] " + s.stage + " " + s.pct + "%", "info");
+});
+
 document.getElementById("btn-analyze").onclick = async () => {
   if (!activeFile) return term("abra primero un fichero", "err");
-  term("analizando " + activeFile + " …", "info");
+  const panel = document.getElementById("analysis");
+  panel.classList.add("open");
+  document.getElementById("an-name").textContent = activeFile.split("/").pop();
+  document.getElementById("an-sha").textContent = "calculando…";
+  document.getElementById("an-list").innerHTML = "";
+  document.getElementById("an-detail").textContent = "Ejecutando detectores…";
+  document.getElementById("explain-box").style.display = "none";
+  document.getElementById("btn-explain").disabled = true;
   try {
-    const r = await api.tools.analyzeBasic(activeFile);
-    term(JSON.stringify(r, null, 2), "ok");
-    askAgent("Analiza estos resultados de análisis estático: " + JSON.stringify(r));
-  } catch (e) { term("error: " + e, "err"); }
+    lastResult = await api.analysis.run(activeFile);
+    renderAnalysis(lastResult);
+    document.getElementById("btn-explain").disabled = false;
+    term("análisis completado: " + lastResult.findings.length + " hallazgos", "ok");
+  } catch (e) {
+    term("error de análisis: " + e, "err");
+    document.getElementById("an-detail").textContent = "Error: " + e;
+  }
 };
+
+document.getElementById("btn-close-analysis").onclick = () =>
+  document.getElementById("analysis").classList.remove("open");
+
+function maxSeverity(findings) {
+  const order = ["critical", "high", "medium", "low", "info"];
+  for (const s of order) if (findings.some((f) => f.severity === s)) return s;
+  return "info";
+}
+
+function renderAnalysis(r) {
+  document.getElementById("an-type").textContent = r.format.type + (r.format.arch ? " · " + r.format.arch : "");
+  document.getElementById("an-sha").textContent = r.file.sha256.slice(0, 24) + "…";
+  document.getElementById("an-sha").onclick = () => {
+    navigator.clipboard.writeText(r.file.sha256).then(() => term("sha256 copiado", "ok"));
+  };
+  const risk = maxSeverity(r.findings);
+  document.getElementById("an-risk").innerHTML =
+    '<span class="sev ' + risk + '">RIESGO AGREGADO: ' + risk.toUpperCase() + "</span>";
+
+  // chips por fuente
+  const sources = [...new Set(r.findings.map((f) => f.source))];
+  const chips = document.getElementById("an-chips");
+  chips.innerHTML = "";
+  sourceFilter = null;
+  for (const s of sources) {
+    const c = document.createElement("button");
+    c.className = "chip";
+    c.textContent = s;
+    c.onclick = () => {
+      sourceFilter = sourceFilter === s ? null : s;
+      [...chips.children].forEach((x) => x.classList.toggle("on", x.textContent === sourceFilter));
+      renderFindings(r);
+    };
+    chips.appendChild(c);
+  }
+  document.getElementById("an-search").oninput = () => renderFindings(r);
+  renderFindings(r);
+}
+
+function renderFindings(r) {
+  const q = document.getElementById("an-search").value.toLowerCase();
+  const list = document.getElementById("an-list");
+  list.innerHTML = "";
+  const filtered = r.findings.filter((f) =>
+    (!sourceFilter || f.source === sourceFilter) &&
+    (!q || (f.title + " " + f.detail + " " + f.refs.join(" ")).toLowerCase().includes(q)));
+
+  const groups = ["critical", "high", "medium", "low", "info"];
+  for (const g of groups) {
+    const items = filtered.filter((f) => f.severity === g);
+    if (!items.length) continue;
+    const h = document.createElement("p");
+    h.className = "sev-group";
+    h.textContent = g + " (" + items.length + ")";
+    list.appendChild(h);
+    for (const f of items) list.appendChild(renderFinding(f));
+  }
+  if (!filtered.length) {
+    const p = document.createElement("p");
+    p.style.color = "#475569";
+    p.textContent = "Sin hallazgos con este filtro.";
+    list.appendChild(p);
+  }
+}
+
+function renderFinding(f) {
+  const d = document.createElement("div");
+  d.className = "finding";
+  const sev = document.createElement("span");
+  sev.className = "sev " + f.severity;
+  sev.textContent = f.severity.toUpperCase();
+  const t = document.createElement("div");
+  t.className = "t";
+  t.appendChild(sev);
+  t.appendChild(document.createTextNode(" " + f.title));
+  const det = document.createElement("div");
+  det.className = "d";
+  det.textContent = f.detail;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = "id: " + f.id + " · source: " + f.source + (f.refs.length ? " · refs: " + f.refs.slice(0, 4).join(", ") : "");
+  d.appendChild(t); d.appendChild(det); d.appendChild(meta);
+  d.onclick = () => {
+    document.getElementById("an-detail").textContent =
+      f.title + " — " + f.detail + " | referencias: " + (f.refs.join(", ") || "ninguna");
+  };
+  return d;
+}
+
+/* ---------- Explicación del agente (prompt de triaje) ---------- */
+document.getElementById("btn-explain").onclick = async () => {
+  if (!lastResult) return;
+  const box = document.getElementById("explain-box");
+  box.style.display = "block";
+  box.textContent = "Consultando al agente…";
+  term("[agent] triaje → JSON de hallazgos enviado", "info");
+  try {
+    const ex = await api.ai.explain(lastResult);
+    if (ex.parse_error) {
+      box.textContent = "El agente no devolvió JSON válido. Respuesta bruta:
+" + ex.raw;
+      return;
+    }
+    let html = "";
+    html += '<span class="sev ' + (ex.risk || "info") + '">RIESGO: ' + (ex.risk || "?").toUpperCase() + "</span>";
+    html += ' <span style="color:#64748b">confianza: ' + (ex.confidence ?? "?") + "%</span>";
+    html += '<p style="margin-top:6px;color:#e2e8f0">' + esc(ex.summary || "") + "</p>";
+    if (ex.likely_behavior?.length) html += "<p style='color:#fbbf24'>Comportamiento probable: " + esc(ex.likely_behavior.join("; ")) + "</p>";
+    if (ex.next_steps?.length) {
+      html += "<p style='color:#22d3ee'>Siguientes pasos:</p><ul style='margin:2px 0 4px 18px;color:#94a3b8'>";
+      for (const s of ex.next_steps) html += "<li>" + esc(s.action) + " <span style='color:#64748b'>[" + esc(s.tool || "") + "]</span> <span style='color:#475569'>" + esc(s.why || "") + "</span></li>";
+      html += "</ul>";
+    }
+    if (ex.ioc_candidates?.length) html += "<p style='color:#f87171'>IOC candidatos: " + esc(ex.ioc_candidates.join(", ")) + "</p>";
+    if (ex.unknowns?.length) html += "<p style='color:#64748b'>Evidencia insuficiente para: " + esc(ex.unknowns.join("; ")) + "</p>";
+    box.innerHTML = html;
+  } catch (e) {
+    box.textContent = "Error del agente: " + e;
+  }
+};
+
+function esc(s) { const d = document.createElement("div"); d.textContent = String(s); return d.innerHTML; }
+
+/* ---------- Chat del agente ---------- */
 function addMsg(text, who) {
   const c = document.getElementById("chat");
   const d = document.createElement("div");
@@ -157,9 +365,10 @@ document.getElementById("p-ollama").onclick = async () => {
   document.getElementById("p-ollama").classList.add("active");
   document.getElementById("p-mistral").classList.remove("active");
 };
-api.tools.onStream((data) => term("[stream] " + data.split("\n").pop(), "info"));
+api.tools.onStream((data) => term("[stream] " + data.split("
+").pop(), "info"));
 refreshProvider().then(loadPlugins);
-addMsg("Sesión iniciada. Tengo acceso al editor, al análisis de ficheros y a los plugins. ¿Qué analizamos hoy?", "bot");
+addMsg("Sesión iniciada. Flujo v0.2 disponible: abra un binario y pulse Analizar; luego pídame que explique los hallazgos.", "bot");
 </script>
 </body>
 </html>
