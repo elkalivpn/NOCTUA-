@@ -26,9 +26,6 @@ function loadConfig() {
 }
 
 /* ---------- Terminal PTY (issue #3, diseño docs/DESIGN-terminal.md) ---------- */
-/* Fábrica real: único punto del código que conoce node-pty. Degradación (R7):
-   node-pty es optionalDependency; si no compiló, require falla aquí dentro y
-   terminal:create devuelve un error claro: la app funciona sin terminal. */
 function createPtyFactory() {
   let nodePty = null;
   let loadError = null;
@@ -81,6 +78,10 @@ ipcMain.handle("fs:readDir", async (_e, p) => {
 });
 ipcMain.handle("fs:pickFile", async () => {
   const r = await dialog.showOpenDialog(win, { properties: ["openFile"] });
+  return r.canceled ? null : r.filePaths[0];
+});
+ipcMain.handle("fs:pickDir", async () => {
+  const r = await dialog.showOpenDialog(win, { properties: ["openDirectory"] });
   return r.canceled ? null : r.filePaths[0];
 });
 

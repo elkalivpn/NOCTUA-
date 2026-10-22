@@ -9,7 +9,7 @@
 </head>
 <body>
 <header>
-  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.2</span>
+  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.3</span>
   <span style="margin-left:auto; display:flex; gap:8px;">
     <span class="badge ok">sandbox listo</span>
     <span class="badge" id="provider-badge">cargando…</span>
@@ -18,7 +18,15 @@
   </span>
 </header>
 <div class="wrap">
-  <div id="sidebar"><h3>Workspace</h3><div id="filelist"></div><h3>Plugins</h3><div id="pluginlist"></div></div>
+  <div id="sidebar">
+    <h3>Workspace</h3>
+    <div id="tree-toolbar">
+      <button class="badge action" id="btn-open-dir">Abrir carpeta</button>
+      <button class="badge action" id="btn-collapse">Contraer</button>
+    </div>
+    <div id="tree"></div>
+    <h3>Plugins</h3><div id="pluginlist"></div>
+  </div>
   <div id="editorArea">
     <div id="editor"></div>
     <div id="analysis">
@@ -69,6 +77,7 @@
 <script src="vendor/xterm/xterm.js"></script>
 <script src="vendor/xterm/addon-fit/addon-fit.js"></script>
 <script src="terminal.js"></script>
+<script src="tree.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

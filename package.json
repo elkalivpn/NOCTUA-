@@ -1,6 +1,6 @@
 {
   "name": "noctua-ide",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "NOCTUA — IDE de investigación de seguridad para Kali Linux",
   "main": "src/main.js",
   "scripts": {

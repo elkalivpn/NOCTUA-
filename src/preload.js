@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("noctua", {
   fs: {
@@ -6,7 +6,10 @@ contextBridge.exposeInMainWorld("noctua", {
     readBinary: (p) => ipcRenderer.invoke("fs:readBinary", p),
     writeFile: (p, d) => ipcRenderer.invoke("fs:writeFile", p, d),
     readDir: (p) => ipcRenderer.invoke("fs:readDir", p),
-    pickFile: () => ipcRenderer.invoke("fs:pickFile")
+    pickFile: () => ipcRenderer.invoke("fs:pickFile"),
+    pickDir: () => ipcRenderer.invoke("fs:pickDir"),
+    // sandbox: File.path no existe; webUtils es la vía sancionada por Electron
+    pathForFile: (file) => webUtils.getPathForFile(file)
   },
   ai: {
     chat: (prompt, context) => ipcRenderer.invoke("ai:chat", { prompt, context }),

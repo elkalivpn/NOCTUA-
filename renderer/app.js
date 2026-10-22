@@ -13,7 +13,7 @@ window.MonacoEnvironment = {
 require.config({ paths: { vs: "vendor/monaco/vs" } });
 require(["vs/editor/editor.main"], function () {
   window.editor = monaco.editor.create(document.getElementById("editor"), {
-    value: "// Bienvenido a NOCTUA. Abra un fichero y pulse Analizar para el flujo v0.2.",
+    value: "// Bienvenido a NOCTUA. Abra una carpeta en el árbol y pulse Analizar para el flujo v0.2.",
     language: "python", theme: "vs-dark", automaticLayout: true,
     fontFamily: "'JetBrains Mono', monospace", fontSize: 13
   });
@@ -52,20 +52,56 @@ async function loadPlugins() {
   if (!list.length) el.innerHTML = "<p style='color:#475569;font-size:11px;padding:4px 10px;'>Sin plugins instalados</p>";
 }
 
-document.getElementById("btn-open").onclick = async () => {
-  const p = await api.fs.pickFile();
+/* ---------- apertura de ficheros (compartida por botón, árbol y drop) ---------- */
+async function openFile(p) {
   if (!p) return;
   activeFile = p;
   try {
     const content = await api.fs.readFile(p);
     if (window.editor) {
       window.editor.setValue(content);
-      const lang = p.endsWith(".py") ? "python" : p.endsWith(".js") ? "javascript" : p.endsWith(".md") ? "markdown" : "plaintext";
-      monaco.editor.setModelLanguage(window.editor.getModel(), lang);
+      monaco.editor.setModelLanguage(window.editor.getModel(), languageFor(p));
     }
-  } catch (e) { term("binario o no-UTF8: solo análisis (" + e.message + ")", "err"); }
-  term("abierto: " + p, "info");
+    term("abierto: " + p, "info");
+  } catch (e) {
+    term("binario o no-UTF8: solo análisis (" + e.message + ")", "err");
+  }
+}
+
+document.getElementById("btn-open").onclick = async () => {
+  const p = await api.fs.pickFile();
+  if (p) await openFile(p);
 };
+
+/* ---------- Árbol de proyectos (módulo independiente: renderer/tree.js) ---------- */
+WorkspaceTree.init(document.getElementById("tree"), { onFileOpen: openFile });
+WorkspaceTree.enableExternalDrop();
+document.getElementById("btn-open-dir").onclick = async () => {
+  const dir = await api.fs.pickDir();
+  if (dir) await WorkspaceTree.setRoot(dir);
+};
+document.getElementById("btn-collapse").onclick = () => WorkspaceTree.collapseAll();
+
+/* ---------- Drag-and-drop: del árbol o del SO al editor ---------- */
+const editorEl = document.getElementById("editor");
+editorEl.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "copy";
+});
+editorEl.addEventListener("drop", async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const p = e.dataTransfer.getData("text/plain");
+  if (p) return openFile(p); // arrastre interno desde el árbol
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) {
+    const path = await api.fs.pathForFile(f);
+    if (path) {
+      await WorkspaceTree.addFileRoot(path);
+      await openFile(path);
+    }
+  }
+}, true);
 
 /* ---------- Flujo vertical v0.2 ---------- */
 api.analysis.onProgress((s) => {
@@ -277,4 +313,4 @@ document.getElementById("p-ollama").onclick = async () => {
 };
 api.tools.onStream((data) => term("[stream] " + data.split("\n").pop(), "info"));
 refreshProvider().then(loadPlugins);
-addMsg("Sesión iniciada. Flujo v0.2: abra un binario y pulse Analizar. La pestaña ＋ TERMINAL abre una PTY real de su shell.", "bot");
+addMsg("Sesión iniciada. Abra una carpeta en el árbol del workspace, pulse Analizar para el flujo v0.2 o use la pestaña ＋ TERMINAL.", "bot");

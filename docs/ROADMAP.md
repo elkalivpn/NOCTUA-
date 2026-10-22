@@ -20,7 +20,7 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 ## v0.3 (actual) — Depuración y workspace
 - [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
 - [ ] Backend de depuración GDB/MI con breakpoints reflejados en el editor — diseño: docs/DESIGN-debugger.md
-- [ ] Árbol de proyectos (explorador de ficheros del workspace)
+- [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
 
 ## v0.4 — Ingeniería inversa y sandbox
 - [ ] Ghidra headless bridge, reglas CAPA, MITRE ATT&CK, VM dedicada con snapshots

@@ -10,6 +10,7 @@ const rendererDir = path.join(__dirname, "..", "renderer");
 const html = fs.readFileSync(path.join(rendererDir, "index.html"), "utf8");
 const appJs = fs.readFileSync(path.join(rendererDir, "app.js"), "utf8");
 const termJs = fs.readFileSync(path.join(rendererDir, "terminal.js"), "utf8");
+const treeJs = fs.readFileSync(path.join(rendererDir, "tree.js"), "utf8");
 
 test("CSP estricta declarada en el renderer", () => {
   const m = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/);
@@ -37,7 +38,7 @@ test("sin recursos remotos ni código inline en el renderer", () => {
   assert.ok(!/<script[^>]+src=["']https?:/.test(html), "ningún <script> remoto");
   assert.ok(!/<script(?![^>]*src=)[^>]*>/.test(html), "sin bloques <script> inline");
   assert.ok(!/<style/.test(html), "sin <style> inline");
-  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs), "sin referencias a CDNs");
+  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs + treeJs), "sin referencias a CDNs");
   assert.match(html, /<link rel="stylesheet" href="styles.css">/);
   assert.ok(fs.existsSync(path.join(rendererDir, "styles.css")), "styles.css debe existir");
 });
@@ -53,6 +54,11 @@ test("xterm se sirve en local (self-host, issue #3)", () => {
   assert.match(html, /<script src="vendor\/xterm\/xterm\.js"><\/script>/);
   assert.match(html, /<script src="vendor\/xterm\/addon-fit\/addon-fit\.js"><\/script>/);
   assert.ok(!/https?:/.test(termJs), "terminal.js no debe referenciar remotos");
+});
+
+test("árbol de proyectos cargado como módulo local", () => {
+  assert.match(html, /<script src="tree\.js"><\/script>/);
+  assert.ok(!/https?:/.test(treeJs), "tree.js no debe referenciar remotos");
 });
 
 test("vendors generados por postinstall; node-pty opcional y no versionado", () => {

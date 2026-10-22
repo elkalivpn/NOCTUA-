@@ -16,8 +16,9 @@
 +------------------------------+--------------------------------+
 | Renderer (Chromium, sandbox: true, sin Node)                   |
 |  - Monaco editor (self-host en renderer/vendor, sin CDN)      |
+|  - Árbol de proyectos (tree.js: lazy + drag-and-drop)         |
 |  - Panel de terminal PTY (xterm.js self-hosted)               |
-|  - UI: index.html + app.js + terminal.js + styles.css (CSP)   |
+|  - UI: index.html + app.js + tree.js + terminal.js + styles  |
 |  - Acceso exclusivo vía window.noctua (contextBridge)          |
 +---------------------------------------------------------------+
 ```
@@ -35,10 +36,17 @@ Principios:
 
 `default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'`
 
-- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `terminal.js`); ningún script remoto es cargable.
+- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`); ningún script remoto es cargable.
 - `blob:` en `script-src`/`worker-src` existe exclusivamente para el proxy de web workers de Monaco.
 - `style-src` mantiene `'unsafe-inline'` porque Monaco y xterm fijan estilos inline en el DOM: es la única relajación de la política.
 - El renderer no hace peticiones de red: `connect-src 'self'`.
+
+## Árbol de proyectos (v0.3.0)
+
+- `renderer/tree.js`: módulo independiente. Carga diferida por carpeta mediante el IPC `fs:readDir` ya existente (no amplía la superficie de lectura: el renderer ya podía listar directorios).
+- Ficheros arrastrados desde el sistema operativo: las rutas se resuelven con `webUtils.getPathForFile` en el preload, la vía sancionada por Electron en renderers con sandbox (`File.path` no existe allí).
+- Iconos por tipo generados en local (glifos con clases CSS), sin fuentes de iconos remotas.
+- Utilidades puras (`iconFor`, `sortEntries`, `languageFor`, `joinPath`) exportadas para `node:test`: la lógica de ordenación y mapeo es testeable sin Electron.
 
 ## Terminal (issue #3, diseño docs/DESIGN-terminal.md)
 
@@ -79,5 +87,6 @@ Permisos: `events`, `commands`, `fs`, `tools`, `ai`. Denegados por defecto; el c
 
 - Los plugins se ejecutan hoy en el proceso principal: el modelo de permisos limita la superficie, pero el aislamiento real (utilityProcess) es el issue #6.
 - La PTY ejecuta con los privilegios del usuario: es una shell real, sin sandboxing. El aislamiento por utilityProcess y perfiles es la fase 2 del diseño de la terminal.
+- El árbol de proyectos no persiste su estado (raíces, expansiones) entre sesiones y carga los hijos por carperta al expandir, nunca de golpe.
 - No existe análisis dinámico: ninguna muestra se ejecuta. La ejecución controlada requiere una VM dedicada y está pospuesta a v0.4 a propósito.
 - La depuración en tiempo real (v0.3) sigue el diseño de `docs/DESIGN-debugger.md` (GDB/MI); su implementación aún no ha comenzado.
