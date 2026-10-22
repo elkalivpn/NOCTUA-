@@ -15,6 +15,9 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+        env:
+          # los tests usan FakePty: no se reconstruye node-pty en el job de tests
+          NOCTUA_SKIP_REBUILD: "1"
       - run: npm test
 
   build:
@@ -27,8 +30,11 @@ jobs:
         with:
           node-version: 22
       - run: npm install
-      - name: Dependencias nativas para Electron en Linux
-        run: sudo apt-get update && sudo apt-get install -y libarchive-tools
+        env:
+          NOCTUA_SKIP_REBUILD: "1"
+      - name: Toolchain para módulos nativos
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools build-essential python3
+      - run: npm run rebuild
       - run: npm run build
       - uses: softprops/action-gh-release@v2
         with:

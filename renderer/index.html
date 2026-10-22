@@ -5,6 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>NOCTUA — Grey Hat IDE</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="vendor/xterm/xterm.css">
 </head>
 <body>
 <header>
@@ -56,11 +57,18 @@
   </div>
 </div>
 <div id="bottom">
-  <div id="tabs"><button class="active">TERMINAL</button><button>SALIDA</button></div>
-  <div id="terminal"></div>
+  <div id="tabs">
+    <button id="tab-output" class="active">SALIDA</button>
+    <button id="tab-term">＋ TERMINAL</button>
+  </div>
+  <div id="output"></div>
+  <div id="realterm"></div>
 </div>
 
 <script src="vendor/monaco/vs/loader.js"></script>
+<script src="vendor/xterm/xterm.js"></script>
+<script src="vendor/xterm/addon-fit/addon-fit.js"></script>
+<script src="terminal.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 "use strict";
-/* Regresión de seguridad del renderer (issues #4 y #5):
+/* Regresión de seguridad del renderer (issues #3, #4 y #5):
    CSP estricta, cero recursos remotos, sin scripts/estilos inline. */
 const test = require("node:test");
 const assert = require("node:assert");
@@ -9,6 +9,7 @@ const path = require("node:path");
 const rendererDir = path.join(__dirname, "..", "renderer");
 const html = fs.readFileSync(path.join(rendererDir, "index.html"), "utf8");
 const appJs = fs.readFileSync(path.join(rendererDir, "app.js"), "utf8");
+const termJs = fs.readFileSync(path.join(rendererDir, "terminal.js"), "utf8");
 
 test("CSP estricta declarada en el renderer", () => {
   const m = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/);
@@ -36,7 +37,7 @@ test("sin recursos remotos ni código inline en el renderer", () => {
   assert.ok(!/<script[^>]+src=["']https?:/.test(html), "ningún <script> remoto");
   assert.ok(!/<script(?![^>]*src=)[^>]*>/.test(html), "sin bloques <script> inline");
   assert.ok(!/<style/.test(html), "sin <style> inline");
-  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs), "sin referencias a CDNs");
+  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs), "sin referencias a CDNs");
   assert.match(html, /<link rel="stylesheet" href="styles.css">/);
   assert.ok(fs.existsSync(path.join(rendererDir, "styles.css")), "styles.css debe existir");
 });
@@ -47,10 +48,19 @@ test("Monaco se sirve en local (self-host, issue #5)", () => {
   assert.match(appJs, /getWorkerUrl/, "debe definir el proxy de workers de Monaco");
 });
 
-test("vendor de Monaco se genera por postinstall y no se versiona", () => {
+test("xterm se sirve en local (self-host, issue #3)", () => {
+  assert.match(html, /<link rel="stylesheet" href="vendor\/xterm\/xterm\.css">/);
+  assert.match(html, /<script src="vendor\/xterm\/xterm\.js"><\/script>/);
+  assert.match(html, /<script src="vendor\/xterm\/addon-fit\/addon-fit\.js"><\/script>/);
+  assert.ok(!/https?:/.test(termJs), "terminal.js no debe referenciar remotos");
+});
+
+test("vendors generados por postinstall; node-pty opcional y no versionado", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf8"));
-  assert.ok(pkg.scripts.postinstall.includes("copy-monaco"));
-  assert.ok(pkg.devDependencies["monaco-editor"], "monaco-editor debe ser devDependency");
+  assert.equal(pkg.scripts.postinstall, "node scripts/postinstall.js");
+  assert.ok(pkg.scripts.rebuild && pkg.scripts.rebuild.includes("electron-rebuild"), "debe existir npm run rebuild");
+  assert.ok(pkg.optionalDependencies["node-pty"], "node-pty debe ser optionalDependency (degradación elegante)");
+  assert.ok(pkg.devDependencies["@xterm/xterm"], "@xterm/xterm debe ser devDependency");
   const gitignore = fs.readFileSync(path.join(__dirname, "..", ".gitignore"), "utf8");
   assert.match(gitignore, /renderer\/vendor\//);
 });

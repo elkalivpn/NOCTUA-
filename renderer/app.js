@@ -1,6 +1,6 @@
 "use strict";
 /* NOCTUA renderer — lógica de UI (app.js).
-   La CSP del index.html prohíbe scripts inline: todo el JS del renderer vive en este fichero local. */
+   La CSP del index.html prohíbe scripts inline: todo el JS del renderer vive en ficheros locales. */
 
 /* ---------- Monaco: self-host desde renderer/vendor (sin CDN) ---------- */
 const base = location.href.replace(/[^/]*$/, ""); // directorio renderer/
@@ -22,7 +22,7 @@ require(["vs/editor/editor.main"], function () {
 });
 
 const term = (text, cls) => {
-  const el = document.getElementById("terminal");
+  const el = document.getElementById("output");
   const p = document.createElement("div");
   if (cls) p.className = cls;
   p.textContent = text;
@@ -114,7 +114,6 @@ function renderAnalysis(r) {
   document.getElementById("an-risk").innerHTML =
     '<span class="sev ' + risk + '">RIESGO AGREGADO: ' + risk.toUpperCase() + "</span>";
 
-  // chips por fuente
   const sources = [...new Set(r.findings.map((f) => f.source))];
   const chips = document.getElementById("an-chips");
   chips.innerHTML = "";
@@ -217,6 +216,34 @@ document.getElementById("btn-explain").onclick = async () => {
 
 function esc(s) { const d = document.createElement("div"); d.textContent = String(s); return d.innerHTML; }
 
+/* ---------- Terminal real (PTY, issue #3) ---------- */
+const tabOut = document.getElementById("tab-output");
+const tabTerm = document.getElementById("tab-term");
+const outputEl = document.getElementById("output");
+const realtermEl = document.getElementById("realterm");
+
+function switchTab(which) {
+  const real = which === "term";
+  tabOut.classList.toggle("active", !real);
+  tabTerm.classList.toggle("active", real);
+  outputEl.style.display = real ? "none" : "block";
+  realtermEl.classList.toggle("open", real);
+}
+
+tabOut.onclick = () => switchTab("out");
+tabTerm.onclick = async () => {
+  switchTab("term");
+  if (TerminalPanel.isActive()) return;
+  realtermEl.textContent = "abriendo PTY…";
+  try {
+    await TerminalPanel.start(realtermEl);
+    term("terminal PTY iniciada", "ok");
+  } catch (e) {
+    realtermEl.textContent = "Terminal no disponible: " + e;
+    term("terminal no disponible: " + e, "err");
+  }
+};
+
 /* ---------- Chat del agente ---------- */
 function addMsg(text, who) {
   const c = document.getElementById("chat");
@@ -250,4 +277,4 @@ document.getElementById("p-ollama").onclick = async () => {
 };
 api.tools.onStream((data) => term("[stream] " + data.split("\n").pop(), "info"));
 refreshProvider().then(loadPlugins);
-addMsg("Sesión iniciada. Flujo v0.2 disponible: abra un binario y pulse Analizar; luego pídame que explique los hallazgos.", "bot");
+addMsg("Sesión iniciada. Flujo v0.2: abra un binario y pulse Analizar. La pestaña ＋ TERMINAL abre una PTY real de su shell.", "bot");

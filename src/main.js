@@ -6,6 +6,7 @@ const { AIAgent } = require("./ai-agent");
 const { PluginLoader } = require("./plugin-loader");
 const { analyzeBasic } = require("./analyze");
 const { runAnalysis } = require("./main/analysis");
+const { TerminalManager } = require("./main/terminal");
 
 let win;
 const agent = new AIAgent(loadConfig());
@@ -23,6 +24,40 @@ function loadConfig() {
     };
   }
 }
+
+/* ---------- Terminal PTY (issue #3, diseño docs/DESIGN-terminal.md) ---------- */
+/* Fábrica real: único punto del código que conoce node-pty. Degradación (R7):
+   node-pty es optionalDependency; si no compiló, require falla aquí dentro y
+   terminal:create devuelve un error claro: la app funciona sin terminal. */
+function createPtyFactory() {
+  let nodePty = null;
+  let loadError = null;
+  try {
+    nodePty = require("node-pty");
+  } catch (e) {
+    loadError = e;
+  }
+  return ({ cols, rows, cwd, shell, env }) => {
+    if (!nodePty) {
+      throw new Error("node-pty no disponible (falta compilación: npm run rebuild) — " +
+        (loadError && loadError.message ? loadError.message : "dependencia no instalada"));
+    }
+    return nodePty.spawn(shell, [], {
+      name: "xterm-256color",
+      cols,
+      rows,
+      cwd: cwd || undefined,
+      env: env || process.env
+    });
+  };
+}
+
+const terminal = new TerminalManager({
+  ptyFactory: createPtyFactory(),
+  maxSessions: 3,
+  onOutput: (m) => win?.webContents.send("terminal:data", m),
+  onExit: (m) => win?.webContents.send("terminal:exit", m)
+});
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -54,17 +89,25 @@ ipcMain.handle("ai:chat", async (_e, { prompt, context }) =>
   agent.complete(prompt, agent.buildContext(context)));
 ipcMain.handle("ai:describe", () => agent.describe());
 ipcMain.handle("ai:switchProvider", (_e, provider) => { agent.setProvider(provider); return agent.describe(); });
-// Triaje: recibe el AnalysisResult del contrato, devuelve JSON estructurado.
 ipcMain.handle("ai:explain", (_e, result) => agent.explain(result));
 
 /* ---------- IPC: análisis ---------- */
-// Flujo vertical v0.2: orquestador con workers + progreso por etapas.
 ipcMain.handle("analyze:run", async (_e, p, opts) =>
   runAnalysis(p, {
     yaraRules: opts?.yaraRules || null,
     onProgress: (s) => win?.webContents.send("analyze:progress", s)
   }));
 ipcMain.handle("analyze:basic", (_e, filePath) => analyzeBasic(filePath));
+
+/* ---------- IPC: terminal (issue #3) ---------- */
+ipcMain.handle("terminal:create", async (_e, opts = {}) => terminal.create(opts));
+ipcMain.on("terminal:write", (_e, { id, data } = {}) => {
+  try { terminal.write(id, data); } catch (e) { console.error("[terminal] write:", e.message); }
+});
+ipcMain.on("terminal:resize", (_e, { id, cols, rows } = {}) => {
+  try { terminal.resize(id, cols, rows); } catch (e) { console.error("[terminal] resize:", e.message); }
+});
+ipcMain.handle("terminal:kill", (_e, { id } = {}) => terminal.kill(id));
 
 /* ---------- IPC: herramientas directas ---------- */
 function runTool(cmd, args, opts = {}) {
@@ -88,4 +131,8 @@ app.whenReady().then(async () => {
   await plugins.loadAll();
   createWindow();
 });
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("window-all-closed", () => {
+  terminal.killAll();
+  if (process.platform !== "darwin") app.quit();
+});
+app.on("will-quit", () => { terminal.killAll(); });
