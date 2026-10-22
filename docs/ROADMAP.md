@@ -19,7 +19,7 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 - [x] Esqueleto Electron con IPC seguro, editor Monaco, agente IA configurable, análisis básico, puentes rizin/YARA, plugins con permisos, CI, MIT, ARCHITECTURE.md
 
 ## v0.3 — Depuración (diseño antes que código)
-- [ ] Documento de diseño: GDB/MI vs rz-pipe (issue #2)
+- [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
 - [ ] Backend de depuración con breakpoints reflejados en el editor
 
 ## v0.4 — Ingeniería inversa y sandbox
