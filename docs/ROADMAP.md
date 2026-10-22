@@ -12,7 +12,8 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 - [x] Tests con fixtures generados en runtime (PE sintético limpio/packer/injection)
 - [x] CSP estricta en el renderer: default-src 'self', sin scripts inline ni remotos, object-src 'none' (issue #4)
 - [x] Self-host de Monaco: servido desde renderer/vendor/monaco, copiado por postinstall, fuera del repo (issue #5)
-- [ ] Árbol de proyectos y terminal integrada (node-pty) — issue #3
+- [ ] Terminal integrada (node-pty + xterm.js self-hosted) — issue #3 — diseño en revisión: docs/DESIGN-terminal.md
+- [ ] Árbol de proyectos (explorador de ficheros del workspace)
 
 ## v0.1 — completado
 - [x] Esqueleto Electron con IPC seguro, editor Monaco, agente IA configurable, análisis básico, puentes rizin/YARA, plugins con permisos, CI, MIT, ARCHITECTURE.md
