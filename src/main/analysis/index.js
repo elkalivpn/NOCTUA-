@@ -37,9 +37,23 @@ function runDetectorInWorker(name, input) {
   });
 }
 
+/* Subselección de detectores (v0.3.2, paleta de comandos): null = todos.
+   Los detectores no seleccionados ni siquiera lanzan su herramienta/worker. */
+const ALL_DETECTORS = ["format", "entropy", "imports", "strings", "yara", "mitigations"];
+function normalizeDetectors(list) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const sel = new Set();
+  for (const d of list) {
+    if (!ALL_DETECTORS.includes(d)) throw new Error("detector desconocido: " + d);
+    sel.add(d);
+  }
+  return sel;
+}
+
 async function runAnalysis(filePath, opts = {}) {
   const onProgress = opts.onProgress || (() => {});
-  const yaraRules = opts.yaraRules || null; // p.ej. "/usr/share/yara" o un fichero de reglas
+  const yaraRules = opts.yaraRules || null;
+  const sel = normalizeDetectors(opts.detectors); // p.ej. "/usr/share/yara" o un fichero de reglas
 
   onProgress({ stage: "reading", pct: 5 });
   const buf = await fs.readFile(filePath);
@@ -60,29 +74,32 @@ async function runAnalysis(filePath, opts = {}) {
 
   onProgress({ stage: "tools", pct: 45 });
   // Herramientas externas en paralelo (spawn: no bloquea el event loop).
+  const wantImports = !sel || sel.has("imports");
+  const wantYara = (!sel || sel.has("yara")) && !!yaraRules;
   const [rabinOut, yaraOut] = await Promise.all([
-    runTool("rabin2", ["-i", filePath]),
-    yaraRules
+    wantImports ? runTool("rabin2", ["-i", filePath]) : Promise.resolve({ code: 127, out: "", err: "imports no seleccionados" }),
+    wantYara
       ? runTool("yara", ["-r", yaraRules, filePath])
-      : Promise.resolve({ code: 127, out: "", err: "sin reglas configuradas" })
+      : Promise.resolve({ code: 127, out: "", err: sel && !sel.has("yara") ? "yara no seleccionado" : "sin reglas configuradas" })
   ]);
 
   onProgress({ stage: "detectors", pct: 65 });
   // Detectores pesados en workers; ligeros inline (funciones puras).
+  const wantStrings = !sel || sel.has("strings");
   const [stringsRes, importsRes, yaraRes] = await Promise.all([
-    runDetectorInWorker("strings", { buffer: buf }),
-    runDetectorInWorker("imports", { raw: rabinOut.code === 0 ? rabinOut.out : null }),
-    runDetectorInWorker("yara", { raw: yaraOut.code === 0 ? yaraOut.out : null })
+    wantStrings ? runDetectorInWorker("strings", { buffer: buf }) : Promise.resolve({ findings: [], strings: [] }),
+    wantImports ? runDetectorInWorker("imports", { raw: rabinOut.code === 0 ? rabinOut.out : null }) : Promise.resolve({ findings: [], imports: [] }),
+    wantYara ? runDetectorInWorker("yara", { raw: yaraOut.code === 0 ? yaraOut.out : null }) : Promise.resolve({ findings: [], yara: [] })
   ]);
 
   onProgress({ stage: "assemble", pct: 90 });
   const findings = [
-    ...formatFindings(format),
-    ...detectEntropy({ overall, sections }),
-    ...importsRes.findings,
-    ...stringsRes.findings,
-    ...yaraRes.findings,
-    ...detectMitigations(buf, format, importsRes.imports)
+    ...(!sel || sel.has("format") ? formatFindings(format) : []),
+    ...(!sel || sel.has("entropy") ? detectEntropy({ overall, sections }) : []),
+    ...(!sel || sel.has("imports") ? importsRes.findings : []),
+    ...(!sel || sel.has("strings") ? stringsRes.findings : []),
+    ...(!sel || sel.has("yara") ? yaraRes.findings : []),
+    ...(!sel || sel.has("mitigations") ? detectMitigations(buf, format, importsRes.imports) : [])
   ];
 
   const result = {
@@ -98,4 +115,4 @@ async function runAnalysis(filePath, opts = {}) {
   return validated;
 }
 
-module.exports = { runAnalysis };
+module.exports = { runAnalysis, normalizeDetectors, ALL_DETECTORS };

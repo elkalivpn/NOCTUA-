@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld("noctua", {
     onExit: (cb) => ipcRenderer.on("dbg:exit", (_e, ev) => cb(ev))
   },
   tools: {
+    run: (tool, file) => ipcRenderer.invoke("tool:run", { tool, file }),
     rz: (file, cmd) => ipcRenderer.invoke("tool:rz", { file, cmd }),
     yara: (rules, file) => ipcRenderer.invoke("tool:yara", { rules, file }),
     onStream: (cb) => ipcRenderer.on("tool:stream", (_e, data) => cb(data))

@@ -125,6 +125,7 @@ ipcMain.handle("ai:explain", (_e, result) => agent.explain(result));
 ipcMain.handle("analyze:run", async (_e, p, opts) =>
   runAnalysis(p, {
     yaraRules: opts?.yaraRules || null,
+    detectors: Array.isArray(opts?.detectors) ? opts.detectors : null,
     onProgress: (s) => win?.webContents.send("analyze:progress", s)
   }));
 ipcMain.handle("analyze:basic", (_e, filePath) => analyzeBasic(filePath));
@@ -157,6 +158,22 @@ ipcMain.handle("dbg:relaunch", (_e, { sessionId } = {}) => debuggerManager.relau
 ipcMain.handle("dbg:quit", (_e, { sessionId } = {}) => debuggerManager.quit(sessionId));
 
 /* ---------- IPC: herramientas directas ---------- */
+/* Whitelist fija para la paleta de comandos (v0.3.2): el renderer pasa un id
+   de esta tabla, nunca el ejecutable ni los argumentos. Sin shell, timeout 60 s. */
+const PALETTE_TOOLS = {
+  file: { cmd: "file", args: (f) => [f] },
+  sha256: { cmd: "sha256sum", args: (f) => [f] },
+  strings: { cmd: "strings", args: (f) => ["-n", "8", f] },
+  readelf: { cmd: "readelf", args: (f) => ["-h", f] },
+  rabin: { cmd: "rabin2", args: (f) => ["-I", f] },
+  imports: { cmd: "rabin2", args: (f) => ["-i", f] }
+};
+ipcMain.handle("tool:run", (_e, { tool, file } = {}) => {
+  const t = PALETTE_TOOLS[tool];
+  if (!t) throw new Error("herramienta no permitida (whitelist): " + tool);
+  if (typeof file !== "string" || !file) throw new Error("tool:run exige la ruta del fichero");
+  return runTool(t.cmd, t.args(file));
+});
 function runTool(cmd, args, opts = {}) {
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { timeout: 60000, ...opts });

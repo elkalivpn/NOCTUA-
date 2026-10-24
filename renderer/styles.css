@@ -123,3 +123,16 @@ header { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0
 #realterm { flex: 1; display: none; padding: 4px 10px; min-height: 0; overflow: hidden; }
 #realterm.open { display: block; }
 #realterm .xterm { height: 100%; }
+
+
+/* ---- Paleta de comandos (v0.3.2) ---- */
+#palette-overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, .62); z-index: 200; display: none; }
+#palette-overlay.open { display: block; }
+#palette { position: absolute; top: 12vh; left: 50%; transform: translateX(-50%); width: 660px; max-width: 92vw; background: #0d1117; border: 1px solid #1c2230; border-radius: 10px; box-shadow: 0 18px 48px rgba(0, 0, 0, .55); overflow: hidden; }
+#palette-input { display: block; width: 100%; background: #0b0e14; border: none; border-bottom: 1px solid #1c2230; color: #e2e8f0; padding: 12px 14px; font: inherit; font-size: 13px; outline: none; }
+.pal-list { max-height: 320px; overflow-y: auto; }
+.pal-item { display: flex; gap: 10px; align-items: baseline; padding: 7px 14px; cursor: pointer; color: #cbd5e1; font-size: 12px; }
+.pal-item .cat { color: #22d3ee; min-width: 104px; font-size: 11px; }
+.pal-item.sel { background: #1e293b; color: #f1f5f9; }
+.pal-empty { padding: 12px 14px; color: #64748b; font-size: 12px; }
+.finding.flash { outline: 2px solid #22d3ee; }
