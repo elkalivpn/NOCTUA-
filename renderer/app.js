@@ -13,12 +13,13 @@ window.MonacoEnvironment = {
 require.config({ paths: { vs: "vendor/monaco/vs" } });
 require(["vs/editor/editor.main"], function () {
   window.editor = monaco.editor.create(document.getElementById("editor"), {
-    value: "// Bienvenido a NOCTUA. Abra una carpeta en el árbol y pulse Analizar para el flujo v0.2.",
+    value: "// Bienvenido a NOCTUA. Abra una carpeta en el árbol, pulse Analizar para el flujo v0.2 o Depurar para GDB/MI.",
     language: "python", theme: "vs-dark", automaticLayout: true,
     fontFamily: "'JetBrains Mono', monospace", fontSize: 13
   });
   monaco.editor.defineTheme("noctua", { base: "vs-dark", inherit: true, rules: [], colors: { "editor.background": "#0b0e14" } });
   monaco.editor.setTheme("noctua");
+  DebuggerUI.attachEditor(window.editor);
 });
 
 const term = (text, cls) => {
@@ -61,6 +62,7 @@ async function openFile(p) {
     if (window.editor) {
       window.editor.setValue(content);
       monaco.editor.setModelLanguage(window.editor.getModel(), languageFor(p));
+      DebuggerUI.renderBreakpoints();
     }
     term("abierto: " + p, "info");
   } catch (e) {
@@ -81,6 +83,15 @@ document.getElementById("btn-open-dir").onclick = async () => {
   if (dir) await WorkspaceTree.setRoot(dir);
 };
 document.getElementById("btn-collapse").onclick = () => WorkspaceTree.collapseAll();
+
+/* ---------- Depuración (módulo independiente: renderer/debugger.js) ---------- */
+DebuggerUI.init({
+  api,
+  openFile,
+  term,
+  getActiveFile: () => activeFile,
+  switchTab
+});
 
 /* ---------- Drag-and-drop: del árbol o del SO al editor ---------- */
 const editorEl = document.getElementById("editor");
@@ -252,18 +263,21 @@ document.getElementById("btn-explain").onclick = async () => {
 
 function esc(s) { const d = document.createElement("div"); d.textContent = String(s); return d.innerHTML; }
 
-/* ---------- Terminal real (PTY, issue #3) ---------- */
+/* ---------- Terminal real (PTY, issue #3) y pestañas inferiores ---------- */
 const tabOut = document.getElementById("tab-output");
 const tabTerm = document.getElementById("tab-term");
+const tabDbg = document.getElementById("tab-dbg");
 const outputEl = document.getElementById("output");
 const realtermEl = document.getElementById("realterm");
+const dbgpanelEl = document.getElementById("dbgpanel");
 
 function switchTab(which) {
-  const real = which === "term";
-  tabOut.classList.toggle("active", !real);
-  tabTerm.classList.toggle("active", real);
-  outputEl.style.display = real ? "none" : "block";
-  realtermEl.classList.toggle("open", real);
+  tabOut.classList.toggle("active", which === "out");
+  tabTerm.classList.toggle("active", which === "term");
+  tabDbg.classList.toggle("active", which === "dbg");
+  outputEl.style.display = which === "out" ? "block" : "none";
+  realtermEl.classList.toggle("open", which === "term");
+  dbgpanelEl.classList.toggle("open", which === "dbg");
 }
 
 tabOut.onclick = () => switchTab("out");
@@ -279,6 +293,7 @@ tabTerm.onclick = async () => {
     term("terminal no disponible: " + e, "err");
   }
 };
+tabDbg.onclick = () => switchTab("dbg");
 
 /* ---------- Chat del agente ---------- */
 function addMsg(text, who) {
@@ -313,4 +328,4 @@ document.getElementById("p-ollama").onclick = async () => {
 };
 api.tools.onStream((data) => term("[stream] " + data.split("\n").pop(), "info"));
 refreshProvider().then(loadPlugins);
-addMsg("Sesión iniciada. Abra una carpeta en el árbol del workspace, pulse Analizar para el flujo v0.2 o use la pestaña ＋ TERMINAL.", "bot");
+addMsg("Sesión iniciada. Abra una carpeta en el árbol, pulse Analizar para el flujo v0.2, use ＋ TERMINAL o Depurar (v0.3.1) para depurar el binario activo.", "bot");

@@ -11,6 +11,7 @@ const html = fs.readFileSync(path.join(rendererDir, "index.html"), "utf8");
 const appJs = fs.readFileSync(path.join(rendererDir, "app.js"), "utf8");
 const termJs = fs.readFileSync(path.join(rendererDir, "terminal.js"), "utf8");
 const treeJs = fs.readFileSync(path.join(rendererDir, "tree.js"), "utf8");
+const dbgJs = fs.readFileSync(path.join(rendererDir, "debugger.js"), "utf8");
 
 test("CSP estricta declarada en el renderer", () => {
   const m = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/);
@@ -38,7 +39,7 @@ test("sin recursos remotos ni código inline en el renderer", () => {
   assert.ok(!/<script[^>]+src=["']https?:/.test(html), "ningún <script> remoto");
   assert.ok(!/<script(?![^>]*src=)[^>]*>/.test(html), "sin bloques <script> inline");
   assert.ok(!/<style/.test(html), "sin <style> inline");
-  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs + treeJs), "sin referencias a CDNs");
+  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs + treeJs + dbgJs), "sin referencias a CDNs");
   assert.match(html, /<link rel="stylesheet" href="styles.css">/);
   assert.ok(fs.existsSync(path.join(rendererDir, "styles.css")), "styles.css debe existir");
 });
@@ -59,6 +60,14 @@ test("xterm se sirve en local (self-host, issue #3)", () => {
 test("árbol de proyectos cargado como módulo local", () => {
   assert.match(html, /<script src="tree\.js"><\/script>/);
   assert.ok(!/https?:/.test(treeJs), "tree.js no debe referenciar remotos");
+});
+
+test("depurador cargado como módulo local (v0.3.1)", () => {
+  assert.match(html, /<script src="debugger\.js"><\/script>/);
+  assert.ok(!/https?:/.test(dbgJs), "debugger.js no debe referenciar remotos");
+  assert.match(html, /id="dbg-confirm"/, "debe existir el modal de confirmación de ejecución (R6)");
+  assert.match(html, /id="btn-debug"/);
+  assert.match(dbgJs, /confirmStart/, "el arranque debe respetar debugger.confirmStart");
 });
 
 test("vendors generados por postinstall; node-pty opcional y no versionado", () => {

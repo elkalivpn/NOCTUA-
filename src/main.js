@@ -7,9 +7,11 @@ const { PluginLoader } = require("./plugin-loader");
 const { analyzeBasic } = require("./analyze");
 const { runAnalysis } = require("./main/analysis");
 const { TerminalManager } = require("./main/terminal");
+const { DebuggerManager, buildGdbArgs } = require("./main/debugger/manager");
 
 let win;
-const agent = new AIAgent(loadConfig());
+const config = loadConfig();
+const agent = new AIAgent(config);
 const plugins = new PluginLoader(path.join(app.getPath("userData"), "plugins"));
 
 function loadConfig() {
@@ -20,7 +22,8 @@ function loadConfig() {
     return {
       provider: "mistral",
       mistral: { apiKey: "", model: "mistral-large-latest" },
-      ollama: { url: "http://127.0.0.1:11434", model: "qwen2.5-coder:32b" }
+      ollama: { url: "http://127.0.0.1:11434", model: "qwen2.5-coder:32b" },
+      debugger: { enabled: true, confirmStart: true, loadUserInit: false }
     };
   }
 }
@@ -54,6 +57,32 @@ const terminal = new TerminalManager({
   maxSessions: 3,
   onOutput: (m) => win?.webContents.send("terminal:data", m),
   onExit: (m) => win?.webContents.send("terminal:exit", m)
+});
+
+/* ---------- Depurador GDB/MI (issue #2, diseño docs/DESIGN-debugger.md) ---------- */
+const dbgDefaults = { enabled: true, confirmStart: true, loadUserInit: false };
+const dbgConfig = Object.assign({}, dbgDefaults, config.debugger || {});
+
+/* Adaptador del proceso gdb: argv array sin shell (R5). gdb se lanza con -nx
+   salvo opt-in del usuario (debugger.loadUserInit). */
+function spawnGdbAdapter({ binary, loadUserInit }) {
+  const p = spawn("gdb", buildGdbArgs({ binary, loadUserInit }), { stdio: ["pipe", "pipe", "pipe"] });
+  const listeners = { stdout: [], exit: [], error: [] };
+  const adapter = {
+    write: (s) => { p.stdin.write(s); },
+    kill: () => { try { p.stdin.end(); } catch (e) {} p.kill("SIGKILL"); },
+    on: (ev, cb) => { (listeners[ev] = listeners[ev] || []).push(cb); return adapter; }
+  };
+  p.stdout.on("data", (d) => { for (const cb of listeners.stdout) cb(d.toString("utf8")); });
+  p.on("exit", (code) => { for (const cb of listeners.exit) cb(code); });
+  p.on("error", (err) => { for (const cb of listeners.error) cb(err); });
+  return adapter;
+}
+
+const debuggerManager = new DebuggerManager({
+  spawnGdb: spawnGdbAdapter,
+  maxSessions: 2,
+  onEvent: (ev) => win?.webContents.send("dbg:" + ev.type, ev)
 });
 
 async function createWindow() {
@@ -110,6 +139,23 @@ ipcMain.on("terminal:resize", (_e, { id, cols, rows } = {}) => {
 });
 ipcMain.handle("terminal:kill", (_e, { id } = {}) => terminal.kill(id));
 
+/* ---------- IPC: depurador (issue #2) ---------- */
+ipcMain.handle("dbg:config", () => dbgConfig);
+ipcMain.handle("dbg:start", async (_e, opts = {}) => {
+  if (!dbgConfig.enabled) throw new Error("depurador deshabilitado en noctua.json (debugger.enabled = false)");
+  if (!opts.binary) throw new Error("dbg:start exige la ruta del binario");
+  return debuggerManager.start(opts);
+});
+ipcMain.handle("dbg:continue", (_e, { sessionId } = {}) => debuggerManager.continue(sessionId));
+ipcMain.handle("dbg:interrupt", (_e, { sessionId } = {}) => debuggerManager.interrupt(sessionId));
+ipcMain.handle("dbg:step", (_e, { sessionId, kind } = {}) => debuggerManager.step(sessionId, kind));
+ipcMain.handle("dbg:setBreakpoint", (_e, { sessionId, file, line } = {}) => debuggerManager.setBreakpoint(sessionId, file, line));
+ipcMain.handle("dbg:removeBreakpoint", (_e, { sessionId, bkptId } = {}) => debuggerManager.removeBreakpoint(sessionId, bkptId));
+ipcMain.handle("dbg:locals", (_e, { sessionId } = {}) => debuggerManager.locals(sessionId));
+ipcMain.handle("dbg:backtrace", (_e, { sessionId } = {}) => debuggerManager.backtrace(sessionId));
+ipcMain.handle("dbg:relaunch", (_e, { sessionId } = {}) => debuggerManager.relaunch(sessionId));
+ipcMain.handle("dbg:quit", (_e, { sessionId } = {}) => debuggerManager.quit(sessionId));
+
 /* ---------- IPC: herramientas directas ---------- */
 function runTool(cmd, args, opts = {}) {
   return new Promise((resolve) => {
@@ -134,6 +180,7 @@ app.whenReady().then(async () => {
 });
 app.on("window-all-closed", () => {
   terminal.killAll();
+  debuggerManager.killAll();
   if (process.platform !== "darwin") app.quit();
 });
-app.on("will-quit", () => { terminal.killAll(); });
+app.on("will-quit", () => { terminal.killAll(); debuggerManager.killAll(); });

@@ -30,6 +30,23 @@ contextBridge.exposeInMainWorld("noctua", {
     onData: (cb) => ipcRenderer.on("terminal:data", (_e, m) => cb(m)),
     onExit: (cb) => ipcRenderer.on("terminal:exit", (_e, m) => cb(m))
   },
+  debugger: {
+    config: () => ipcRenderer.invoke("dbg:config"),
+    start: (opts) => ipcRenderer.invoke("dbg:start", opts),
+    continue: (sessionId) => ipcRenderer.invoke("dbg:continue", { sessionId }),
+    interrupt: (sessionId) => ipcRenderer.invoke("dbg:interrupt", { sessionId }),
+    step: (sessionId, kind) => ipcRenderer.invoke("dbg:step", { sessionId, kind }),
+    setBreakpoint: (sessionId, file, line) => ipcRenderer.invoke("dbg:setBreakpoint", { sessionId, file, line }),
+    removeBreakpoint: (sessionId, bkptId) => ipcRenderer.invoke("dbg:removeBreakpoint", { sessionId, bkptId }),
+    locals: (sessionId) => ipcRenderer.invoke("dbg:locals", { sessionId }),
+    backtrace: (sessionId) => ipcRenderer.invoke("dbg:backtrace", { sessionId }),
+    relaunch: (sessionId) => ipcRenderer.invoke("dbg:relaunch", { sessionId }),
+    quit: (sessionId) => ipcRenderer.invoke("dbg:quit", { sessionId }),
+    onState: (cb) => ipcRenderer.on("dbg:state", (_e, ev) => cb(ev)),
+    onStopped: (cb) => ipcRenderer.on("dbg:stopped", (_e, ev) => cb(ev)),
+    onConsole: (cb) => ipcRenderer.on("dbg:console", (_e, ev) => cb(ev)),
+    onExit: (cb) => ipcRenderer.on("dbg:exit", (_e, ev) => cb(ev))
+  },
   tools: {
     rz: (file, cmd) => ipcRenderer.invoke("tool:rz", { file, cmd }),
     yara: (rules, file) => ipcRenderer.invoke("tool:yara", { rules, file }),

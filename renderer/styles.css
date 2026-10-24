@@ -40,6 +40,38 @@ header { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0
 /* ---- Editor ---- */
 #editorArea { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 #editor { flex: 1; min-height: 0; }
+/* ---- Depurador GDB/MI (v0.3.1) ---- */
+#debug-bar { display: flex; align-items: center; gap: 8px; padding: 4px 10px; background: #0d1117; border-bottom: 1px solid #1c2230; flex: none; }
+#debug-bar .badge:disabled { opacity: .35; cursor: default; }
+#debug-bar .badge:disabled:hover { color: #94a3b8; border-color: #1c2230; }
+#dbg-state { font-size: 11px; color: #64748b; min-width: 150px; }
+#dbg-state.running { color: #34d399; }
+#dbg-state.stopped { color: #fbbf24; }
+.dbg-bp { background: #ef4444; border-radius: 50%; width: 10px; height: 10px; margin-left: 4px; }
+.dbg-current-line { background: #164e63; }
+#dbgpanel { flex: 1; display: none; padding: 8px 14px; min-height: 0; overflow: hidden; }
+#dbgpanel.open { display: flex; flex-direction: column; }
+#dbg-frame { color: #67e8f9; font-size: 11px; padding-bottom: 6px; white-space: pre-wrap; }
+.dbg-cols { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; min-height: 0; }
+.dbg-cols h4 { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.dbg-cols > div { border: 1px solid #1c2230; background: #0b0e14; border-radius: 6px; padding: 8px; overflow-y: auto; min-height: 0; }
+.dbg-cols .dbg-body { font-size: 11px; line-height: 1.5; }
+.dbg-var { display: flex; gap: 8px; padding: 1px 0; }
+.dbg-var .n { color: #67e8f9; }
+.dbg-var .v { color: #cbd5e1; word-break: break-all; }
+.dbg-fr { padding: 2px 4px; border-radius: 4px; color: #94a3b8; }
+.dbg-fr.current { background: #164e63; color: #67e8f9; }
+.dbg-line { white-space: pre-wrap; color: #94a3b8; }
+.dbg-line.tgt { color: #34d399; }
+.dbg-line.log { color: #475569; }
+#dbg-confirm { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 50; }
+#dbg-confirm.open { display: flex; }
+#dbg-confirm .box { background: #0d1117; border: 1px solid #7c2d12; border-radius: 8px; padding: 18px; max-width: 480px; font-size: 12px; line-height: 1.6; }
+#dbg-confirm .target { color: #f87171; word-break: break-all; margin: 8px 0; }
+#dbg-confirm .warn { color: #64748b; font-size: 11px; }
+#dbg-confirm .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+#dbg-confirm button { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; border-radius: 6px; padding: 7px 12px; font: inherit; cursor: pointer; }
+#dbg-confirm button.danger { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
 /* ---- Panel de análisis v0.2 ---- */
 #analysis { position: absolute; inset: 0; background: #0b0e14; display: none; flex-direction: column; padding: 14px 18px; overflow: hidden; }
 #analysis.open { display: flex; }

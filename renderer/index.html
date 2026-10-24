@@ -9,12 +9,13 @@
 </head>
 <body>
 <header>
-  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.3</span>
+  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.3.1</span>
   <span style="margin-left:auto; display:flex; gap:8px;">
     <span class="badge ok">sandbox listo</span>
     <span class="badge" id="provider-badge">cargando…</span>
     <button class="badge action" id="btn-open">Abrir fichero</button>
     <button class="badge action" id="btn-analyze">Analizar (v0.2)</button>
+    <button class="badge action" id="btn-debug">Depurar</button>
   </span>
 </header>
 <div class="wrap">
@@ -28,6 +29,16 @@
     <h3>Plugins</h3><div id="pluginlist"></div>
   </div>
   <div id="editorArea">
+    <div id="debug-bar">
+      <span id="dbg-state">sin sesión</span>
+      <button class="badge action" id="dbg-continue" disabled>Continuar</button>
+      <button class="badge action" id="dbg-interrupt" disabled>Interrumpir</button>
+      <button class="badge action" id="dbg-step-over" disabled>Salto</button>
+      <button class="badge action" id="dbg-step-into" disabled>Entrar</button>
+      <button class="badge action" id="dbg-step-out" disabled>Salir</button>
+      <button class="badge action" id="dbg-relaunch" disabled>Relanzar</button>
+      <button class="badge action" id="dbg-quit" disabled>Terminar sesión</button>
+    </div>
     <div id="editor"></div>
     <div id="analysis">
       <div id="an-head">
@@ -68,9 +79,30 @@
   <div id="tabs">
     <button id="tab-output" class="active">SALIDA</button>
     <button id="tab-term">＋ TERMINAL</button>
+    <button id="tab-dbg">＋ DEPURACIÓN</button>
   </div>
   <div id="output"></div>
   <div id="realterm"></div>
+  <div id="dbgpanel">
+    <div id="dbg-frame">sin marco: inicie una sesión y deténgase en un breakpoint</div>
+    <div class="dbg-cols">
+      <div id="dbg-locals"><h4>Locals</h4><div class="dbg-body"></div></div>
+      <div id="dbg-backtrace"><h4>Backtrace</h4><div class="dbg-body"></div></div>
+      <div id="dbg-console"><h4>Consola gdb / inferior</h4><div class="dbg-body"></div></div>
+    </div>
+  </div>
+</div>
+
+<div id="dbg-confirm">
+  <div class="box">
+    <p>El binario se ejecutará bajo gdb con sus privilegios de usuario actuales.</p>
+    <p class="target" id="dbg-confirm-target"></p>
+    <p class="warn">Depure únicamente binarios en entornos autorizados y controlados. La vía segura para muestras desconocidas es gdbserver en una VM (fase 2 del diseño).</p>
+    <div class="actions">
+      <button id="dbg-confirm-no">Cancelar</button>
+      <button id="dbg-confirm-yes" class="danger">Ejecutar bajo gdb</button>
+    </div>
+  </div>
 </div>
 
 <script src="vendor/monaco/vs/loader.js"></script>
@@ -78,6 +110,7 @@
 <script src="vendor/xterm/addon-fit/addon-fit.js"></script>
 <script src="terminal.js"></script>
 <script src="tree.js"></script>
+<script src="debugger.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
