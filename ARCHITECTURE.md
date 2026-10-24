@@ -20,7 +20,8 @@
 |  - Árbol de proyectos (tree.js: lazy + drag-and-drop)         |
 |  - Panel de terminal PTY (xterm.js self-hosted)               |
 |  - Depuración (debugger.js: barra, breakpoints, backtrace)    |
-|  - UI: index.html + app.js + tree.js + terminal.js + styles  |
+|  - Paleta de comandos (palette.js: registro, búsqueda difusa, overlay) |
+|  - UI: index.html + app.js + tree.js + palette.js + terminal.js + styles  |
 |  - Acceso exclusivo vía window.noctua (contextBridge)          |
 +---------------------------------------------------------------+
 ```
@@ -38,7 +39,7 @@ Principios:
 
 `default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'`
 
-- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`, `debugger.js`); ningún script remoto es cargable.
+- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`, `debugger.js`, `palette.js`); ningún script remoto es cargable.
 - `blob:` en `script-src`/`worker-src` existe exclusivamente para el proxy de web workers de Monaco.
 - `style-src` mantiene `'unsafe-inline'` porque Monaco y xterm fijan estilos inline en el DOM: es la única relajación de la política.
 - El renderer no hace peticiones de red: `connect-src 'self'`.
@@ -64,6 +65,14 @@ Principios:
 - `-nx` por defecto; `debugger.loadUserInit` opt-in en noctua.json. Confirmación de ejecución (R6) configurable con `debugger.confirmStart` (por defecto, true) y habilitación global con `debugger.enabled`.
 - UI (`renderer/debugger.js`): barra de depuración, breakpoints con clic en el margen de Monaco (decoración dbg-bp), línea actual resaltada (dbg-current-line), panel con variables locales, backtrace y consola; renderizado función pura del estado de la sesión (R3).
 
+## Paleta de comandos (v0.3.2)
+
+- `renderer/palette.js`: dos capas separadas. Utilidades puras (`normalizeText`, `fuzzyScore`, `filterCommands`, `createRegistry`) exportadas para `node:test`; el overlay DOM (Ctrl+Shift+P, flechas, Enter, Esc) vive en un IIFE que solo se activa en el navegador, igual que el resto de módulos del renderer.
+- Búsqueda difusa por subsecuencia, insensible a acentos y mayúsculas, sin dependencias externas; los comandos se agrupan por categoría.
+- Los comandos no añaden privilegios: cada uno invoca APIs ya existentes del renderer (ficheros, análisis, depuración, navegación de hallazgos) o el nuevo IPC `tool:run`.
+- `tool:run` (proceso principal) solo acepta una whitelist fija (`PALETTE_TOOLS`: file, sha256sum, strings -n 8, readelf -h, rabin2 -I, rabin2 -i); argv como array sin shell, timeout de 60 s, salida acotada a 50 líneas en la pestaña SALIDA. Ampliar la whitelist exige modificar código auditado; no es configurable desde el renderer.
+- Subselección de detectores: `analyze:run` acepta una lista `detectors` validada contra `ALL_DETECTORS` (`src/main/analysis/index.js`), con el mismo gating y el mismo contrato de hallazgos que el análisis completo.
+
 ## Modelo de amenazas y mitigaciones
 
 | Amenaza | Mitigación actual | Trabajo pendiente |
@@ -75,7 +84,7 @@ Principios:
 | Binario analizado ejecuta código | El análisis es estático: lectura de bytes, hashes, entropía; nada se ejecuta. La única ejecución es la depuración, que exige confirmación explícita (R6) | Sandbox de VM dedicada antes de cualquier análisis dinámico (v0.4) |
 | Inferior depurado se ejecuta con los privilegios del analista | Confirmación explícita por sesión (`debugger.confirmStart`, por defecto true), `debugger.enabled` en noctua.json, gdb con `-nx` por defecto, escapado MI (R5), spawn sin shell | gdbserver con inferior en VM (fase 2 del diseño del depurador) |
 | Exfiltración de muestras a la nube | Proveedor Ollama local configurable; Mistral solo recibe el JSON de triaje que el usuario envía al agente | Etiquetado de datos sensibles antes de llamar a la API |
-| Inyección de comandos en runTool | Argumentos como array (sin shell), timeout fijo | Lista de herramientas permitidas por config |
+| Inyección de comandos en runTool / tool:run | Argumentos como array (sin shell), timeout fijo; tool:run restringido a la whitelist fija PALETTE_TOOLS, ids fuera de lista rechazados | Lista de herramientas permitidas por config |
 | Token de API filtrado | noctua.json fuera del repo (.gitignore), nunca se loguea | Keychain del SO (electron safeStorage) |
 | Dependencia de un CDN comprometido | Monaco y xterm self-hosted desde renderer/vendor; la CSP bloquea cualquier script remoto | — |
 
@@ -102,3 +111,4 @@ Permisos: `events`, `commands`, `fs`, `tools`, `ai`. Denegados por defecto; el c
 - El árbol de proyectos no persiste su estado (raíces, expansiones) entre sesiones y carga los hijos por carperta al expandir, nunca de golpe.
 - No existe análisis dinámico: ninguna muestra se ejecuta desde el análisis. La ejecución controlada requiere una VM dedicada y está pospuesta a v0.4 a propósito.
 - La depuración (v0.3.1) ejecuta el inferior con los privilegios del usuario tras confirmación explícita: la vía segura (gdbserver con inferior en VM) sigue siendo fase 2 del diseño. No hay watchpoints, desensamblado, vista de memoria ni hilos.
+- La paleta de comandos (v0.3.2) no es un ejecutor arbitrario: la whitelist de herramientas externas es fija en el proceso principal y su salida se acota (50 líneas); no existen comandos configurables por el usuario sin tocar código auditado.
