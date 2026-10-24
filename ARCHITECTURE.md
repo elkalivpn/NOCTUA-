@@ -10,6 +10,7 @@
 |  - PluginLoader (permisos por manifest)                        |
 |  - runAnalysis(): contrato zod, detectores, worker_threads     |
 |  - TerminalManager (PTYs, maxSessions, coalescing 16KiB/16ms)  |
+|  - DebuggerManager (GDB/MI: sesiones, watchdog 10 s, coalesc.) |
 |  - runTool(): spawn de rizin, yara, gdb... (timeout 60 s)      |
 +------------------------------+--------------------------------+
                                | IPC (invoke/send/event, contextIsolation)
@@ -18,6 +19,7 @@
 |  - Monaco editor (self-host en renderer/vendor, sin CDN)      |
 |  - Árbol de proyectos (tree.js: lazy + drag-and-drop)         |
 |  - Panel de terminal PTY (xterm.js self-hosted)               |
+|  - Depuración (debugger.js: barra, breakpoints, backtrace)    |
 |  - UI: index.html + app.js + tree.js + terminal.js + styles  |
 |  - Acceso exclusivo vía window.noctua (contextBridge)          |
 +---------------------------------------------------------------+
@@ -36,7 +38,7 @@ Principios:
 
 `default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'`
 
-- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`); ningún script remoto es cargable.
+- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`, `debugger.js`); ningún script remoto es cargable.
 - `blob:` en `script-src`/`worker-src` existe exclusivamente para el proxy de web workers de Monaco.
 - `style-src` mantiene `'unsafe-inline'` porque Monaco y xterm fijan estilos inline en el DOM: es la única relajación de la política.
 - El renderer no hace peticiones de red: `connect-src 'self'`.
@@ -45,13 +47,22 @@ Principios:
 
 - `renderer/tree.js`: módulo independiente. Carga diferida por carpeta mediante el IPC `fs:readDir` ya existente (no amplía la superficie de lectura: el renderer ya podía listar directorios).
 - Ficheros arrastrados desde el sistema operativo: las rutas se resuelven con `webUtils.getPathForFile` en el preload, la vía sancionada por Electron en renderers con sandbox (`File.path` no existe allí).
-- Iconos por tipo generados en local (glifos con clases CSS), sin fuentes de iconos remotas.
+- Iconos por tipo generados en local (glifos con clases CSS), sin fuentes de iconos remotos.
 - Utilidades puras (`iconFor`, `sortEntries`, `languageFor`, `joinPath`) exportadas para `node:test`: la lógica de ordenación y mapeo es testeable sin Electron.
 
 ## Terminal (issue #3, diseño docs/DESIGN-terminal.md)
 
 - `src/main/terminal.js`: TerminalManager con `ptyFactory` inyectada; solo `src/main.js` conoce node-pty. Coalescing de salida (16 KiB / 16 ms), límite de sesiones, `killAll()` en `window-all-closed` y `will-quit`.
 - Degradación elegante: node-pty es `optionalDependency`; si no compila, `require` falla en la fábrica, `terminal:create` devuelve un error claro y la aplicación funciona con la terminal deshabilitada y aviso visible. `npm run rebuild` la reactiva.
+
+## Depurador (issue #2, diseño docs/DESIGN-debugger.md, v0.3.1)
+
+- `src/main/debugger/mi-parser.js`: parser puro de la gramática GDB/MI (línea → registro tipado, correlación por token); toda cadena con contenido del usuario se serializa con el escapado MI (R5), nunca por concatenación cruda.
+- `src/main/debugger/controller.js`: máquina de estados por sesión (idle → launching → running → stopped → exited → closed, más launching → exited para un inferior que muere antes del primer ^running). Transiciones no declaradas se ignoran y se loguean. Watchdog de 10 s por token: el comando sin respuesta se rechaza con TIMEOUT y la sesión queda recuperable; la UI nunca se bloquea (R1).
+- `src/main/debugger/manager.js`: registro de sesiones con `miProcessFactory` inyectada; solo `src/main.js` conoce el spawn real de gdb (`--interpreter=mi2 --quiet [-nx] binario`, argv array sin shell). `killAll()` en `window-all-closed` y `will-quit`.
+- Coalescing de stream records (16 KiB / 16 ms por sesión) hacia la consola de depuración.
+- `-nx` por defecto; `debugger.loadUserInit` opt-in en noctua.json. Confirmación de ejecución (R6) configurable con `debugger.confirmStart` (por defecto, true) y habilitación global con `debugger.enabled`.
+- UI (`renderer/debugger.js`): barra de depuración, breakpoints con clic en el margen de Monaco (decoración dbg-bp), línea actual resaltada (dbg-current-line), panel con variables locales, backtrace y consola; renderizado función pura del estado de la sesión (R3).
 
 ## Modelo de amenazas y mitigaciones
 
@@ -61,7 +72,8 @@ Principios:
 | Terminal usada como canal de ejecución desde el renderer | Sesiones creadas por acción explícita del usuario, maxSessions configurable, sin canal de "ejecutar comando": solo escritura en la PTY abierta; teardown garantizado | utilityProcess en fase 2 (issue #6) |
 | node-pty no compila en el equipo del usuario | optionalDependency + require en try/catch: la app arranca con terminal deshabilitada y aviso; npm run rebuild documentado | CI de smoke con PTY real (opcional) |
 | Plugin malicioso (RCE por diseño) | Permisos declarativos por manifest, denegados por defecto; fallo de permiso = plugin descartado | Aislar plugins en utilityProcess (issue #6) |
-| Binario analizado ejecuta código | Solo análisis estático: lectura de bytes, hashes, entropía. Nada se ejecuta | Sandbox de VM dedicada antes de cualquier análisis dinámico (v0.4) |
+| Binario analizado ejecuta código | El análisis es estático: lectura de bytes, hashes, entropía; nada se ejecuta. La única ejecución es la depuración, que exige confirmación explícita (R6) | Sandbox de VM dedicada antes de cualquier análisis dinámico (v0.4) |
+| Inferior depurado se ejecuta con los privilegios del analista | Confirmación explícita por sesión (`debugger.confirmStart`, por defecto true), `debugger.enabled` en noctua.json, gdb con `-nx` por defecto, escapado MI (R5), spawn sin shell | gdbserver con inferior en VM (fase 2 del diseño del depurador) |
 | Exfiltración de muestras a la nube | Proveedor Ollama local configurable; Mistral solo recibe el JSON de triaje que el usuario envía al agente | Etiquetado de datos sensibles antes de llamar a la API |
 | Inyección de comandos en runTool | Argumentos como array (sin shell), timeout fijo | Lista de herramientas permitidas por config |
 | Token de API filtrado | noctua.json fuera del repo (.gitignore), nunca se loguea | Keychain del SO (electron safeStorage) |
@@ -88,5 +100,5 @@ Permisos: `events`, `commands`, `fs`, `tools`, `ai`. Denegados por defecto; el c
 - Los plugins se ejecutan hoy en el proceso principal: el modelo de permisos limita la superficie, pero el aislamiento real (utilityProcess) es el issue #6.
 - La PTY ejecuta con los privilegios del usuario: es una shell real, sin sandboxing. El aislamiento por utilityProcess y perfiles es la fase 2 del diseño de la terminal.
 - El árbol de proyectos no persiste su estado (raíces, expansiones) entre sesiones y carga los hijos por carperta al expandir, nunca de golpe.
-- No existe análisis dinámico: ninguna muestra se ejecuta. La ejecución controlada requiere una VM dedicada y está pospuesta a v0.4 a propósito.
-- La depuración en tiempo real (v0.3) sigue el diseño de `docs/DESIGN-debugger.md` (GDB/MI); su implementación aún no ha comenzado.
+- No existe análisis dinámico: ninguna muestra se ejecuta desde el análisis. La ejecución controlada requiere una VM dedicada y está pospuesta a v0.4 a propósito.
+- La depuración (v0.3.1) ejecuta el inferior con los privilegios del usuario tras confirmación explícita: la vía segura (gdbserver con inferior en VM) sigue siendo fase 2 del diseño. No hay watchpoints, desensamblado, vista de memoria ni hilos.

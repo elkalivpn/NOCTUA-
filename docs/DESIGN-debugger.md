@@ -1,6 +1,6 @@
 # Diseño — Debugger integrado (issue #2)
 
-Estado: propuesta en revisión, previa a cualquier código. Este documento es el requisito que el propio issue #2 impone.
+Estado: implementado en v0.3.1 (`src/main/debugger/`, `renderer/debugger.js`, tests con FakeMiProcess). Este documento es la especificación de referencia del módulo; §12 registra las decisiones del revisor ya adoptadas y §13 la evaluación diferida de DAP.
 
 ## 1. Objetivo y alcance
 
@@ -33,17 +33,16 @@ Decisión: GDB/MI como protocolo de integración de la fase 1. rzpipe queda como
 
 ## 4. Protocolo de integración: GDB/MI
 
-Lanzamiento: `gdb --interpreter=mi2 --nx --quiet ./binary` (con argv array). Cada comando MI lleva un token numérico; la respuesta lleva el mismo token.
+Lanzamiento: `gdb --interpreter=mi2 --quiet [-nx] ./binary` (argv array, sin shell). `-nx` es el comportamiento por defecto; el flag opt-in `debugger.loadUserInit` de noctua.json lo retira bajo responsabilidad explícita del usuario (§12.3). Cada comando MI lleva un token numérico; la respuesta lleva el mismo token.
 
 Gramática que NOCTUA parsea (una línea por registro):
 
 - Result records: `token^done`, `token^running`, `token^error,code="..",msg=".."` — correlación comando/respuesta por token.
 - Exec async records: `*running,thread-id="all"` y `*stopped,reason="breakpoint-hit",bkptno="1",frame={addr="0x..",func="main",args=[],file="main.c",fullname="/ruta/main.c",line="10"}` — eventos push del inferior; otros motivos: `signal-received`, `end-stepping-range`, `exited-normally`.
 - Notify async records: `=breakpoint-modified`, `=thread-group-started`, `=thread-group-exited`.
-- Stream records: `~"consola
-"`, `@"salida del inferior"`, `&"log de gdb"` — se coalescen (16 KiB / 16 ms, misma política que la terminal) hacia la pestaña de salida.
+- Stream records: `~"consola\n"`, `@"salida del inferior"`, `&"log de gdb"` — se coalescen (16 KiB / 16 ms, misma política que la terminal) hacia la pestaña de salida.
 
-Comandos de la fase 1: `-file-exec-and-symbols`, `-exec-run`, `-exec-continue`, `-exec-interrupt`, `-exec-next / -exec-step / -exec-finish`, `-break-insert --source FILE --line N`, `-break-delete N`, `-stack-list-variables --simple-values`, `-gdb-exit`.
+Comandos de la fase 1: `-file-exec-and-symbols`, `-exec-run`, `-exec-continue`, `-exec-interrupt`, `-exec-next / -exec-step / -exec-finish`, `-break-insert --source FILE --line N`, `-break-delete N`, `-stack-list-variables --simple-values`, `-stack-list-frames`, `-exec-arguments`, `-gdb-exit`. `-stack-list-frames` se añadió al aprobarse el backtrace (§12.1); `-exec-arguments` soporta argumentos del inferior en el lanzamiento.
 
 El parser es un módulo puro (`src/main/debugger/mi-parser.js`): línea → registro tipado. Toda cadena con datos del usuario (rutas) se serializa con el escapado de la gramática MI (comillas y barras), nunca por concatenación cruda (R5).
 
@@ -60,6 +59,10 @@ Máquina de estados de `src/main/debugger/controller.js` (cada transición emite
 | exited | Inferior terminado, gdb vivo; se puede relanzar (reload) | relaunch → launching; quit → closed |
 | closed | gdb terminado, sesión finiquitada; killAll garantizado en will-quit | — |
 
+Transición adicional declarada: launching → exited. Un inferior que muere antes del primer ^running (exit inmediato) produce `*stopped,reason=exited-*` durante el lanzamiento y la sesión pasa a exited sin haber pisado running. Está cubierta por tests.
+
+Códigos de error del módulo: NO_SESSION, BAD_STATE, BAD_ARGS, TIMEOUT, MI_ERROR, LAUNCH_FAILED, GDB_EXITED, MAX_SESSIONS. TIMEOUT lo emite el watchdog (§6) y deja la sesión en un estado recuperable.
+
 La UI es función pura de (estado, último frame): no hay heurísticas sobre texto de consola (R3).
 
 ## 6. Pausar y reanudar sin congelar la UI
@@ -69,19 +72,22 @@ El principio: gdb es un proceso hijo del proceso principal; el renderer solo hab
 - Reanudar: `dbg:continue` es invoke que resuelve en cuanto llega `^running` (milisegundos), no cuando el inferior termina. El evento posterior `*stopped` llega por el canal de eventos `dbg:stopped` cuando el breakpoint se alcanza, minutos después si hace falta.
 - Pausar: `dbg:interrupt` envía `-exec-interrupt`, que resuelve con `^done` en cuanto gdb acepta la petición; la detención efectiva se confirma luego con `*stopped,reason="signal-received",signal-name="SIGINT"` por el canal de eventos. La UI pasa a "interrumpiendo…" (estado intermedio del indicador) y a stopped al confirmar.
 - Nunca hay invoke que espere al inferior: la lista de canales lo garantiza por construcción (R1, R2).
-- Watchdog por token: si un comando no recibe su registro de resultado en 10 s, se emite `dbg:state` con error y la sesión pasa a un estado recuperable (el usuario puede reintentar o cerrar); la app sigue respondiendo.
-- Backpressure: los stream records se coalescen; un inferior que imprime sin parar no satura el IPC.
+- Watchdog por token: si un comando no recibe su registro de resultado en 10 s, el invoke se rechaza con código TIMEOUT y se emite `dbg:state` con error; la sesión queda recuperable (el usuario puede reintentar o cerrar); la app sigue respondiendo.
+- Backpressure: los stream records se coalescen (16 KiB / 16 ms por sesión); un inferior que imprime sin parar no satura el IPC.
 
 Contrato IPC:
 
 | Canal | Dirección | Mecanismo | Payload | Resuelve en |
 |---|---|---|---|---|
 | dbg:start | R → M | invoke | { binary, args?, breakpoints? } | ^running o ^error → { sessionId } |
+| dbg:config | R → M | invoke | { } | configuración leída: { enabled, confirmStart, loadUserInit } |
 | dbg:continue / dbg:interrupt | R → M | invoke | { sessionId } | ^running / ^done |
 | dbg:step | R → M | invoke | { sessionId, kind: over/into/out } | ^running |
 | dbg:setBreakpoint | R → M | invoke | { sessionId, file, line } | ^done con bkpt → { bkptId } |
 | dbg:removeBreakpoint | R → M | invoke | { sessionId, bkptId } | ^done |
 | dbg:locals | R → M | invoke | { sessionId } | ^done con variables (solo en stopped) |
+| dbg:backtrace | R → M | invoke | { sessionId } | ^done con marcos (solo en stopped) |
+| dbg:relaunch | R → M | invoke | { sessionId } | ^running (exited → launching → -exec-run) |
 | dbg:quit | R → M | invoke | { sessionId } | gdb terminado |
 | dbg:state | M → R | event | { sessionId, state, error? } | — |
 | dbg:stopped | M → R | event | { sessionId, frame } | — |
@@ -97,20 +103,22 @@ Preload: `api.debugger.*` con invoke/event, idéntico patrón al de terminal y a
 - Marco sin file/line (binario sin símbolos): mostrar dirección y nota "sin símbolos de depuración"; el fallback de desensamblado con rizin es fase 2 (R7: no se adivina).
 - Las decoraciones son por sesión: al cerrar la sesión se limpian.
 
+Implementado en v0.3.1: el clic en el margen alterna el breakpoint (decoración `dbg-bp`) y la línea actual usa la clase `dbg-current-line`; la barra de depuración deshabilita acciones según el estado de la sesión.
+
 ## 8. Modelo de amenazas (adiciones)
 
 | Amenaza | Mitigación |
 |---|---|
 | El inferior es malware y se ejecuta en la máquina del analista | Confirmación explícita en cada dbg:start con texto claro ("el binario se ejecutará con sus privilegios de usuario"); flags `debugger.confirmStart` (default true) y `debugger.enabled` en noctua.json; la vía segura documentada es gdbserver en VM (fase 2) |
 | Inyección en comandos MI | argv array sin shell; escapado MI para cualquier cadena con contenido del usuario (R5) |
-| gdb/init files no deterministas | Se lanza con `-nx`; init del usuario (pwndbg, etc.) fuera de fase 1 y documentado como limitación |
+| gdb/init files no deterministas | `-nx` por defecto; `debugger.loadUserInit` (opt-in, §12.3) permite cargar init del usuario (pwndbg/gef) asumiendo salida MI no determinista, bajo responsabilidad explícita del usuario |
 | Sesiones huérfanas | dbg:quit mata inferior y gdb; killAll en window-all-closed y will-quit |
 | Flood de consola | Coalescing 16 KiB / 16 ms por sesión |
 
 ## 9. Plan de pruebas
 
 - `tests/mi-parser.test.js`: transcripciones MI reales como fixtures inline; tokens, registros exec/notify/stream, errores, frames anidados.
-- `tests/debugger.test.js`: FakeMiProcess con guiones de transcripción; máquina de estados (transiciones válidas, rechazo de inválidas), watchdog, correlación por token, ciclo completo run → breakpoint-hit → continue → exit.
+- `tests/debugger.test.js`: FakeMiProcess con guiones de transcripción; máquina de estados (transiciones válidas, rechazo de inválidas), watchdog, correlación por token, ciclo completo run → breakpoint-hit → continue → exit, relanzamiento y backtrace.
 - CI sin gdb (R4), mismo criterio que FakePty en la terminal.
 
 ## 10. Orden de implementación
@@ -121,13 +129,25 @@ Preload: `api.debugger.*` con invoke/event, idéntico patrón al de terminal y a
 4. UI: barra de depuración, glyph margin, línea actual, confirmación de inicio, pestaña de consola de depuración.
 5. README, ARCHITECTURE (modelo de amenazas), ROADMAP.
 
+Completado en v0.3.1 siguiendo este orden.
+
 ## 11. Fase 2 (pospuesto deliberadamente)
 
 gdbserver en VM (mismo MI por target remote), watchpoints, vista de desensamblado vía rizin, memoria/hex, hilos, mapeo de rutas para binarios compilados fuera del host.
 
-## 12. Decisiones abiertas para el revisor
+## 12. Decisiones del revisor (adoptadas e implementadas en v0.3.1)
 
-1. ¿Alcance de inspección en fase 1: solo marco actual y locals (propuesta) o también backtrace completo (-stack-list-frames)?
-2. ¿Relanzamiento del inferior en estado exited con un solo clic (propuesta) o exigir sesión nueva?
-3. ¿Respetar un flag para cargar init del usuario (pwndbg) aceptando MI no determinista? Propuesta: no en fase 1.
-4. ¿Evaluar Debug Adapter Protocol como capa futura sobre MI en v0.4+? Propuesta: postergar la evaluación; MI directo es más simple y suficiente para el flujo vertical.
+1. Alcance de inspección: backtrace completo incluido. Además de locals, `dbg:backtrace` expone `-stack-list-frames` en el panel. Adoptado.
+2. Relanzamiento del inferior en estado exited con un solo clic: `dbg:relaunch` hace exited → launching y `-exec-run` de nuevo con la misma sesión. Adoptado.
+3. Init del usuario (pwndbg/gef): gdb se lanza con `-nx` por defecto; `debugger.loadUserInit` en noctua.json (opt-in, por defecto false) permite cargarlo asumiendo MI no determinista. Adoptado como opt-in.
+4. Debug Adapter Protocol: evaluación diferida; ver §13.
+
+## 13. Evaluación de Debug Adapter Protocol (diferida)
+
+DAP añadiría una capa reutilizable sobre MI y la promesa de múltiples engines (lldb, js) bajo la misma UI. Razones para postergarlo:
+
+- Duplicaría el estado de sesión: la máquina de estados de NOCTUA y la del adapter tendrían que sincronizarse, y la fuente de verdad dejaría de ser única.
+- No existe un adapter gdb/MI→DAP open source maduro y mantenido que evite escribirlo nosotros; escribirlo cubriría un subconjunto que MI directo ya resuelve.
+- El flujo vertical de v0.3 solo necesita gdb; añadir una capa ahora es coste sin beneficio inmediato.
+
+Decisión: MI directo en v0.3.x. DAP se reevaluará cuando exista un segundo motor de depuración real en el IDE.

@@ -1,10 +1,11 @@
 # NOCTUA — IDE de investigación de seguridad
 
 IDE de escritorio para análisis de seguridad autorizada en Kali Linux.
-Estado actual: **v0.3.0 — inicio de v0.3 (workspace)**: flujo vertical de análisis (v0.2), terminal PTY real y árbol de proyectos. La depuración interactiva está diseñada (docs/DESIGN-debugger.md) pero aún no implementada.
+Estado actual: **v0.3.1 — depuración interactiva (GDB/MI)**: flujo vertical de análisis (v0.2), terminal PTY real, árbol de proyectos y depuración de binarios nativos con breakpoints en el editor. Con esto, v0.3 queda completado; v0.4 (ingeniería inversa y sandbox de VM) es el siguiente bloque.
 
-## Qué hace hoy (v0.3.0)
+## Qué hace hoy (v0.3.1)
 
+- Depuración interactiva de binarios nativos (GDB/MI): arranque bajo gdb con confirmación explícita, breakpoints con un clic en el margen del editor (Monaco), pausar, reanudar, paso a paso, panel con variables locales, backtrace y consola de depuración, relanzamiento del inferior con un clic. Requiere `gdb`. Advertencia honesta: el inferior se ejecuta con sus privilegios de usuario; la vía segura (gdbserver con inferior en VM) es fase 2 del diseño (docs/DESIGN-debugger.md).
 - Árbol de proyectos: explorador del workspace con carga diferida por carpeta (lazy), iconos por tipo de fichero, click que abre en el editor y drag-and-drop en ambos sentidos (del árbol al editor y del sistema al árbol).
 - Terminal integrada real (PTY): node-pty + xterm.js self-hosted, shell del usuario, sesión única en esta fase. Degradación elegante: si node-pty no compila, la aplicación arranca igual con la terminal deshabilitada y aviso visible.
 - Editor de código (Monaco 0.52 servido en local desde `renderer/vendor`, sin CDN).
@@ -24,11 +25,11 @@ Estado actual: **v0.3.0 — inicio de v0.3 (workspace)**: flujo vertical de aná
 
 ## Qué no hace (honestidad sobre el alcance)
 
-- No analiza malware en ejecución: nada se ejecuta, solo lectura estática. La terminal PTY ejecuta lo que usted escriba: es una shell real con sus privilegios, no una sandbox.
-- No depura en tiempo real todavía: el diseño está publicado en `docs/DESIGN-debugger.md` (GDB/MI) y es el siguiente gran bloque de v0.3.
+- No analiza malware en ejecución: el análisis es solo lectura estática. La terminal PTY ejecuta lo que usted escriba y el depurador ejecuta el binario que usted depure: ambos corren con sus privilegios de usuario, no en una sandbox. La ejecución controlada en VM (gdbserver, análisis dinámico) es fase 2 del diseño del depurador y v0.4 de la hoja de ruta.
+- El depurador no ofrece watchpoints, vista de desensamblado, de memoria ni de hilos: fase 2 del diseño (docs/DESIGN-debugger.md).
 - El árbol no muestra todos los directorios de golpe (lazy) ni persiste su estado entre sesiones.
 - La terminal es de sesión única; multi-pestaña y aislamiento en utilityProcess están pospuestos (fase 2 del diseño e issue #6).
-- No "encuentra 0-days": la contribution realista aquí es **orquestación de fuzzing** (AFL++, boofuzz) con triaje y deduplicación de crashes, planificada en v0.5.
+- No "encuentra 0-days": la contribución realista aquí es **orquestación de fuzzing** (AFL++, boofuzz) con triaje y deduplicación de crashes, planificada en v0.5.
 - No es un sustituto de Ghidra, IDA ni Cuckoo: NOCTUA orquesta herramientas maduras, no las reimplementa.
 
 ## Arquitectura
@@ -36,9 +37,10 @@ Estado actual: **v0.3.0 — inicio de v0.3 (workspace)**: flujo vertical de aná
 Ver `ARCHITECTURE.md` para el modelo de procesos, el modelo de amenazas y el contrato de plugins.
 
 ```
-src/main.js                 Proceso principal (IPC, análisis, herramientas)
+src/main.js                 Proceso principal (IPC, análisis, herramientas, depuración)
 src/main/analysis/          Orquestador v0.2: contrato zod, detectores puros, worker_threads
 src/main/terminal.js         TerminalManager: sesiones PTY con ptyFactory inyectable
+src/main/debugger/           Depurador GDB/MI: mi-parser, controller (máquina de estados), manager
 src/preload.js              Puente seguro (contextBridge + webUtils)
 src/ai-agent.js             Agente IA: API Mistral u Ollama local
 src/analyze.js              Análisis estático básico (v0.1, testeable)
@@ -47,12 +49,13 @@ renderer/index.html         UI con CSP estricta (sin scripts inline)
 renderer/app.js             Lógica del renderer (apertura compartida de ficheros)
 renderer/tree.js            Árbol de proyectos (módulo independiente, lazy + drag-and-drop)
 renderer/terminal.js        Panel de terminal PTY (xterm.js self-hosted)
+renderer/debugger.js        UI de depuración: barra, breakpoints en Monaco, locals/backtrace/consola
 renderer/styles.css          Estilos
 renderer/vendor/            Monaco y xterm self-hosted (generados por npm install; fuera del repo)
 scripts/postinstall.js      Vendors + rebuild de node-pty (omitible con NOCTUA_SKIP_REBUILD=1)
 scripts/copy-monaco.js      Copia Monaco a renderer/vendor
 scripts/copy-xterm.js       Copia xterm.js a renderer/vendor
-tests/                      node:test: análisis, plugins, terminal (FakePty), árbol, CSP
+tests/                      node:test: análisis, plugins, terminal (FakePty), árbol, CSP, debugger (FakeMiProcess)
 ```
 
 ## Instalación en Kali Linux
@@ -73,7 +76,8 @@ Notas de red y compilación:
 
 - `npm install` descarga dependencias una única vez; la aplicación no carga ningún recurso remoto (CSP: `'self'`). Solo el proveedor de IA genera tráfico, y con Ollama local nada sale de la máquina.
 - La terminal real requiere que node-pty compile para Electron: `npm install` lo intenta automáticamente. Si falla, la instalación continúa (dependencia opcional) y la aplicación arranca con la terminal deshabilitada y un aviso. Instale `build-essential` y `python3` y ejecute `npm run rebuild`.
-- La CI de tests usa `NOCTUA_SKIP_REBUILD=1` porque los tests inyectan un FakePty.
+- La depuración requiere `gdb` (ya incluido en la línea de apt install). Los tests no lo necesitan: inyectan un FakeMiProcess con transcripciones de MI, igual que la terminal usa un FakePty.
+- La CI de tests usa `NOCTUA_SKIP_REBUILD=1` porque los tests inyectan dobles de los módulos nativos.
 
 ## Agente IA
 
@@ -88,6 +92,16 @@ Cree `~/.config/noctua/noctua.json`:
 ```
 
 En entornos sin conectividad o con muestras sensibles, use el proveedor Ollama local: nada sale de la máquina.
+
+La depuración se configura en el mismo fichero:
+
+```json
+{
+  "debugger": { "enabled": true, "confirmStart": true, "loadUserInit": false }
+}
+```
+
+`confirmStart` (por defecto, true) exige confirmación cada vez que se ejecuta el inferior; `loadUserInit` (por defecto, false) permite cargar el init de gdb del usuario (pwndbg/gef), asumiendo que la salida MI deja de ser determinista.
 
 ## Plugins
 

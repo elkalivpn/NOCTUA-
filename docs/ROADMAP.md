@@ -3,6 +3,11 @@
 Principio de priorización: un único flujo vertical completo antes de ampliar módulos.
 Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos en panel → sugerencia del agente IA**.
 
+## v0.3 — completado (v0.3.1) — Depuración y workspace
+- [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
+- [x] Backend de depuración GDB/MI con breakpoints reflejados en el editor (v0.3.1) — diseño: docs/DESIGN-debugger.md; máquina de estados, watchdog, locals, backtrace, consola y relanzamiento; tests con FakeMiProcess, CI sin gdb
+- [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
+
 ## v0.2 — completado (v0.2.2)
 - [x] Contrato de hallazgos con validación de esquema (zod) — `src/main/analysis/schema.js`
 - [x] Detectores puros: formato PE/ELF, entropía global y por sección, imports categorizados (taxonomía), strings/URLs/IPs, YARA, mitigaciones (ASLR/DEP/CFG/canary)
@@ -17,13 +22,9 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 ## v0.1 — completado
 - [x] Esqueleto Electron con IPC seguro, editor Monaco, agente IA configurable, análisis básico, puentes rizin/YARA, plugins con permisos, CI, MIT, ARCHITECTURE.md
 
-## v0.3 (actual) — Depuración y workspace
-- [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
-- [ ] Backend de depuración GDB/MI con breakpoints reflejados en el editor — diseño: docs/DESIGN-debugger.md
-- [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
-
-## v0.4 — Ingeniería inversa y sandbox
+## v0.4 (siguiente) — Ingeniería inversa y sandbox
 - [ ] Ghidra headless bridge, reglas CAPA, MITRE ATT&CK, VM dedicada con snapshots
+- [ ] gdbserver con inferior en VM (fase 2 del diseño del depurador): depuración sin ejecutar la muestra en el host
 
 ## v0.5 — Orquestación de fuzzing
 - [ ] Integración AFL++ / boofuzz: campañas, cobertura, triaje de crashes
