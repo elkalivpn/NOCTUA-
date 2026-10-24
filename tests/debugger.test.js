@@ -240,10 +240,11 @@ test("watchdog: comando sin respuesta rechaza TIMEOUT y emite error de estado", 
   const fake = makeFakeGdb([["-nunca", null]]);
   const events = [];
   const s = makeSession(fake, T, events, "dbg-wd");
-  await assert.rejects(async () => {
-    await T.advance(1001);
-    return s.send("-nunca test");
-  }, { code: "TIMEOUT" });
+  /* primero se envía (queda el watchdog pendiente), después se avanza el reloj */
+  const sent = s.send("-nunca test");
+  const check = assert.rejects(sent, { code: "TIMEOUT" });
+  await T.advance(1001);
+  await check;
   assert.ok(events.some((ev) => ev.type === "state" && ev.error && ev.error.indexOf("watchdog") !== -1));
   assert.equal(s.state, "idle", "la sesión queda recuperable");
 });
