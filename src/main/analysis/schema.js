@@ -40,7 +40,9 @@ const AnalysisResultSchema = z.object({
   strings: z.object({
     interesting: z.array(z.string()),
     urls: z.array(z.string()),
-    ips: z.array(z.string())
+    ips: z.array(z.string()),
+    utf16: z.array(z.string()).default([]),
+    embedded: z.array(z.string()).default([])
   })
 });
 
