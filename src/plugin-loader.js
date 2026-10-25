@@ -29,9 +29,16 @@ const { EventEmitter } = require('events');
  *   PROCESO_PLUGIN_MUERTO — el utilityProcess terminó
  *   PLUGIN_NO_LISTO       — handshake ready sin completar
  *   CALL_TIMEOUT          — comando/capacidad sin respuesta a tiempo
+ *
+ * v0.3.4 (issue #12): validación de origen y estructura del manifest (id con
+ * patrón estricto, directorio nombrado como el id, main relativo sin
+ * componentes de escape, origin declarado) y exposición de permisos y
+ * comandos para el renderer, que solo construye affordances para plugins
+ * habilitados con permiso commands.
  */
 
 const ALL_PERMISSIONS = ['events', 'commands', 'fs', 'tools', 'ai'];
+const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const GRANTABLE = ['fs', 'tools', 'ai'];
 const READY_TIMEOUT_MS = 10000;
 const CALL_TIMEOUT_MS = 15000;
@@ -67,6 +74,22 @@ class PluginLoader extends EventEmitter {
     const manifest = JSON.parse(await fs.readFile(path.join(pluginDir, 'manifest.json'), 'utf8'));
     if (!manifest || typeof manifest.id !== 'string' || !manifest.id)
       throw new Error('manifest sin id válido');
+    /* Validación de origen y estructura (issue #12): lo declarado debe
+       coincidir con lo instalado y el punto de entrada no puede salir del
+       directorio del propio plugin. */
+    if (!ID_PATTERN.test(manifest.id))
+      throw new Error('manifest.id no válido: se exige [a-z0-9][a-z0-9-]{0,63}');
+    if (manifest.id !== path.basename(pluginDir))
+      throw new Error('el directorio del plugin debe llamarse como su id');
+    if (this.loaded.has(manifest.id))
+      throw new Error('plugin duplicado: ' + manifest.id);
+    const mainRel = manifest.main || 'main.js';
+    if (typeof mainRel !== 'string' || mainRel.indexOf('..') !== -1 || path.isAbsolute(mainRel) || mainRel.slice(-3) !== '.js')
+      throw new Error('manifest.main debe ser una ruta relativa terminada en .js');
+    if (typeof manifest.version !== 'string' || !manifest.version)
+      throw new Error('manifest.version debe ser una cadena no vacía');
+    if (manifest.origin !== undefined && typeof manifest.origin !== 'string')
+      throw new Error('manifest.origin debe ser una cadena con la URL del repositorio');
     const declared = Array.isArray(manifest.permissions) ? manifest.permissions : [];
     const unknown = declared.filter(function (p) { return ALL_PERMISSIONS.indexOf(p) === -1; });
     if (unknown.length)
@@ -262,7 +285,9 @@ class PluginLoader extends EventEmitter {
         id: p.manifest.id, name: p.manifest.name,
         version: p.manifest.version,
         permissions: p.manifest.permissions || [],
-        enabled: p.enabled
+        enabled: p.enabled,
+        origin: typeof p.manifest.origin === 'string' ? p.manifest.origin : null,
+        commands: Array.from(p.commands)
       };
     });
   }

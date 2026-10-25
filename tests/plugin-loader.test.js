@@ -1,6 +1,6 @@
 'use strict';
 
-/* Tests del contrato de plugins (v0.3.3, issue #6).
+/* Tests del contrato de plugins (issues #6 y #12, v0.3.3/v0.3.4).
  * Se usa un fork en bucle: el worker real (src/utility/plugin-worker.js)
  * conectado mediante un par de puertos en memoria con la misma forma de
  * mensajería que un utilityProcess de Electron. */
@@ -36,6 +36,11 @@ function loopbackFork(workerMod) {
   };
 }
 
+function spyFork(workerMod, forks) {
+  const base = loopbackFork(workerMod);
+  return function () { forks.push(1); return base(); };
+}
+
 async function makePlugin(dir, manifest, mainJs) {
   await fs.mkdir(path.join(dir, manifest.id), { recursive: true });
   await fs.writeFile(path.join(dir, manifest.id, 'manifest.json'), JSON.stringify(manifest));
@@ -67,7 +72,7 @@ test('un plugin sin permiso falla al registrar la capacidad y queda descartado',
     "module.exports.register = function (ctx) { ctx.registerCommand('x', function () {}); };\n");
   const loader = new PluginLoader(dir, { fork: loopbackFork(worker) });
   await loader.loadAll();
-  assert.strictEqual(loader.list().length, 0); /* p2 falló y quedó descartado */
+  assert.strictEqual(loader.list().length, 0);
   await assert.rejects(function () { return loader.runCommand('p2', 'x', []); }, /no encontrado/);
 });
 
@@ -76,11 +81,75 @@ test('permisos desconocidos se rechazan antes de forkear el proceso', async func
   await makePlugin(dir,
     { id: 'p3', name: 'P3', version: '1.0.0', main: 'main.js', permissions: ['rootkit'] },
     "module.exports.register = function () {};\n");
-  const baseFork = loopbackFork(worker);
   const forks = [];
-  const spyFork = function () { forks.push(1); return baseFork(); };
-  const loader = new PluginLoader(dir, { fork: spyFork });
+  const loader = new PluginLoader(dir, { fork: spyFork(worker, forks) });
   await loader.loadAll();
-  assert.strictEqual(forks.length, 0); /* validado en el proceso principal, sin fork */
+  assert.strictEqual(forks.length, 0);
   assert.strictEqual(loader.list().length, 0);
+});
+
+test('manifest.id fuera del patrón se rechaza antes de forkear (issue #12)', async function () {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'noctua-'));
+  await makePlugin(dir,
+    { id: 'Mi Plugin', name: 'MP', version: '1.0.0', main: 'main.js', permissions: [] },
+    "module.exports.register = function () {};\n");
+  const forks = [];
+  const loader = new PluginLoader(dir, { fork: spyFork(worker, forks) });
+  await loader.loadAll();
+  assert.strictEqual(forks.length, 0);
+  assert.strictEqual(loader.list().length, 0);
+});
+
+test('manifest.main con ruta de escape se rechaza (issue #12)', async function () {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'noctua-'));
+  await makePlugin(dir,
+    { id: 'p4', name: 'P4', version: '1.0.0', main: '../evil.js', permissions: [] },
+    "module.exports.register = function () {};\n");
+  const forks = [];
+  const loader = new PluginLoader(dir, { fork: spyFork(worker, forks) });
+  await loader.loadAll();
+  assert.strictEqual(forks.length, 0);
+  assert.strictEqual(loader.list().length, 0);
+});
+
+test('el directorio del plugin debe llamarse como su id (issue #12)', async function () {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'noctua-'));
+  await fs.mkdir(path.join(dir, 'otro'), { recursive: true });
+  await fs.writeFile(path.join(dir, 'otro', 'manifest.json'),
+    JSON.stringify({ id: 'p9', name: 'P9', version: '1.0.0', main: 'main.js', permissions: [] }));
+  await fs.writeFile(path.join(dir, 'otro', 'main.js'), "module.exports.register = function () {};\n");
+  const forks = [];
+  const loader = new PluginLoader(dir, { fork: spyFork(worker, forks) });
+  await loader.loadAll();
+  assert.strictEqual(forks.length, 0);
+  assert.strictEqual(loader.list().length, 0);
+});
+
+test('cargar dos veces no duplica plugins ni forkea de nuevo (issue #12)', async function () {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'noctua-'));
+  await makePlugin(dir,
+    { id: 'p5', name: 'P5', version: '1.0.0', main: 'main.js', permissions: [] },
+    "module.exports.register = function () {};\n");
+  const forks = [];
+  const loader = new PluginLoader(dir, { fork: spyFork(worker, forks) });
+  await loader.loadAll();
+  await loader.loadAll();
+  assert.strictEqual(forks.length, 1);
+  assert.strictEqual(loader.list().length, 1);
+});
+
+test('origin declarado y comandos quedan visibles en la lista (issue #12)', async function () {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'noctua-'));
+  await makePlugin(dir,
+    { id: 'p6', name: 'P6', version: '1.0.0', main: 'main.js', permissions: ['commands'], origin: 'https://example.com/p6' },
+    "module.exports.register = function (ctx) {\n" +
+    "  ctx.registerCommand('saludar2', function () { return 'SI'; });\n" +
+    "};\n");
+  const loader = new PluginLoader(dir, { fork: loopbackFork(worker) });
+  await loader.loadAll();
+  const list = loader.list();
+  assert.strictEqual(list.length, 1);
+  assert.strictEqual(list[0].origin, 'https://example.com/p6');
+  assert.deepStrictEqual(list[0].commands, ['saludar2']);
+  loader.killAll();
 });
