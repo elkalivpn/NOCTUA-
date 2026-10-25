@@ -1,6 +1,6 @@
 {
   "name": "noctua-ide",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "NOCTUA — IDE de investigación de seguridad para Kali Linux",
   "main": "src/main.js",
   "scripts": {
@@ -29,7 +29,8 @@
     "appId": "com.noctua.ide",
     "productName": "NOCTUA",
     "asarUnpack": [
-      "**/node_modules/node-pty/**"
+      "**/node_modules/node-pty/**",
+      "**/src/utility/**"
     ],
     "linux": {
       "target": [

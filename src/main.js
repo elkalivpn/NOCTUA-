@@ -191,6 +191,13 @@ ipcMain.handle("tool:yara", (_e, { rules, file }) => runTool("yara", [rules, fil
 ipcMain.handle("plugins:list", () => plugins.list());
 ipcMain.handle("plugins:toggle", (_e, id) => plugins.toggle(id));
 
+/* Caída de un utilityProcess de plugin (issue #6): el proceso principal
+   sobrevive y el renderer puede reflejar el estado. */
+plugins.on("plugin:crashed", ({ id }) => {
+  console.error("[plugins] el utilityProcess de " + id + " murió de forma inesperada");
+  win?.webContents.send("plugin:crashed", { id });
+});
+
 app.whenReady().then(async () => {
   await plugins.loadAll();
   createWindow();
@@ -198,6 +205,7 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   terminal.killAll();
   debuggerManager.killAll();
+  plugins.killAll();
   if (process.platform !== "darwin") app.quit();
 });
-app.on("will-quit", () => { terminal.killAll(); debuggerManager.killAll(); });
+app.on("will-quit", () => { terminal.killAll(); debuggerManager.killAll(); plugins.killAll(); });
