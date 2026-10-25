@@ -1,6 +1,12 @@
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("noctua", {
+  preferences: {
+    get: (key) => ipcRenderer.invoke("preferences:get", key),
+    set: (key, value) => ipcRenderer.invoke("preferences:set", { key, value }),
+    getAll: () => ipcRenderer.invoke("preferences:getAll"),
+    onChange: (cb) => ipcRenderer.on("preferences:change", (_e, config) => cb(config))
+  },
   fs: {
     readFile: (p) => ipcRenderer.invoke("fs:readFile", p),
     readBinary: (p) => ipcRenderer.invoke("fs:readBinary", p),
