@@ -11,24 +11,16 @@ const { DebuggerManager, buildGdbArgs } = require("./main/debugger/manager");
 const { readHexWindow } = require("./main/hexdump");
 const { buildReport } = require("./main/report");
 const { validateResult } = require("./main/analysis/schema");
+const { preferences } = require("./preferences");
 
 let win;
-const config = loadConfig();
+const config = preferences.load();
 const agent = new AIAgent(config);
 const plugins = new PluginLoader(path.join(app.getPath("userData"), "plugins"));
 
+// Compatibilidad: exportar loadConfig para código existente
 function loadConfig() {
-  const cfgPath = path.join(app.getPath("userData"), "noctua.json");
-  try {
-    return JSON.parse(require("fs").readFileSync(cfgPath, "utf8"));
-  } catch {
-    return {
-      provider: "mistral",
-      mistral: { apiKey: "", model: "mistral-large-latest" },
-      ollama: { url: "http://127.0.0.1:11434", model: "qwen2.5-coder:32b" },
-      debugger: { enabled: true, confirmStart: true, loadUserInit: false }
-    };
-  }
+  return preferences.getAll();
 }
 
 /* ---------- Terminal PTY (issue #3, diseño docs/DESIGN-terminal.md) ---------- */
@@ -57,14 +49,13 @@ function createPtyFactory() {
 
 const terminal = new TerminalManager({
   ptyFactory: createPtyFactory(),
-  maxSessions: 3,
+  maxSessions: preferences.get("terminal.maxSessions", 3),
   onOutput: (m) => win?.webContents.send("terminal:data", m),
   onExit: (m) => win?.webContents.send("terminal:exit", m)
 });
 
 /* ---------- Depurador GDB/MI (issue #2, diseño docs/DESIGN-debugger.md) ---------- */
-const dbgDefaults = { enabled: true, confirmStart: true, loadUserInit: false };
-const dbgConfig = Object.assign({}, dbgDefaults, config.debugger || {});
+const dbgConfig = preferences.get("debugger", { enabled: true, confirmStart: true, loadUserInit: false });
 
 /* Adaptador del proceso gdb: argv array sin shell (R5). gdb se lanza con -nx
    salvo opt-in del usuario (debugger.loadUserInit). */
@@ -131,8 +122,24 @@ ipcMain.handle("fs:hexWindow", async (_e, { path: p, offset } = {}) => {
 ipcMain.handle("ai:chat", async (_e, { prompt, context }) =>
   agent.complete(prompt, agent.buildContext(context)));
 ipcMain.handle("ai:describe", () => agent.describe());
-ipcMain.handle("ai:switchProvider", (_e, provider) => { agent.setProvider(provider); return agent.describe(); });
+ipcMain.handle("ai:switchProvider", (_e, provider) => { 
+  preferences.set("provider", provider);
+  agent.setProvider(provider); 
+  return agent.describe(); 
+});
 ipcMain.handle("ai:explain", (_e, result) => agent.explain(result));
+
+/* ---------- IPC: preferencias (v0.4.0, issue #22) ---------- */
+ipcMain.handle("preferences:get", (_e, key) => preferences.get(key));
+ipcMain.handle("preferences:set", (_e, { key, value }) => {
+  preferences.set(key, value);
+  return preferences.get(key);
+});
+ipcMain.handle("preferences:getAll", () => preferences.getAll());
+// Notificar al renderer cuando cambian las preferencias
+preferences.onChange((config) => {
+  win?.webContents.send("preferences:change", config);
+});
 
 /* ---------- IPC: análisis ---------- */
 ipcMain.handle("analyze:run", async (_e, p, opts) =>
