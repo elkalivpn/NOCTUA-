@@ -39,16 +39,41 @@ let sourceFilter = null;
 async function refreshProvider(desc) {
   document.getElementById("provider-badge").textContent = desc || await api.ai.describe();
 }
+/* Permisos explícitos en el renderer (issue #12): la paleta solo expone los
+   comandos de plugins habilitados que declaran "commands"; el proceso
+   principal re-valida cada invocación (defensa en profundidad). */
+const pluginCmdIds = [];
 async function loadPlugins() {
   const list = await api.plugins.list();
+  for (const cid of pluginCmdIds.splice(0)) registry.unregister(cid);
   const el = document.getElementById("pluginlist");
   el.innerHTML = "";
   for (const p of list) {
     const b = document.createElement("button");
     b.className = "file" + (p.enabled ? " active" : "");
     b.textContent = p.name + " v" + p.version + (p.enabled ? " [ON]" : "");
+    b.title = p.origin || "sin origen declarado";
     b.onclick = async () => { const on = await api.plugins.toggle(p.id); b.classList.toggle("active", on); b.textContent = p.name + " v" + p.version + (on ? " [ON]" : ""); };
     el.appendChild(b);
+    if (p.enabled && (p.permissions || []).indexOf("commands") !== -1) {
+      for (const cmd of p.commands || []) {
+        const cid = "plugin:" + p.id + ":" + cmd;
+        registry.register({
+          id: cid,
+          category: "Plugins",
+          title: "plugin " + p.id + ": " + cmd + (p.origin ? " — " + p.origin : ""),
+          run: async () => {
+            try {
+              const out = await api.plugins.run(p.id, cmd, []);
+              term("[plugin " + p.id + "] " + String(out), "info");
+            } catch (e) {
+              term("[plugin " + p.id + "] error: " + String((e && e.message) || e), "error");
+            }
+          }
+        });
+        pluginCmdIds.push(cid);
+      }
+    }
   }
   if (!list.length) el.innerHTML = "<p style='color:#475569;font-size:11px;padding:4px 10px;'>Sin plugins instalados</p>";
 }
@@ -441,4 +466,5 @@ document.getElementById("btn-palette").onclick = () => CommandPalette.open();
 
 api.tools.onStream((data) => term("[stream] " + data.split("\n").pop(), "info"));
 refreshProvider().then(loadPlugins);
+api.plugins.onToggled(() => loadPlugins());
 addMsg("Sesión iniciada. Abra una carpeta en el árbol, pulse Analizar para el flujo v0.2, use ＋ TERMINAL o Depurar (v0.3.1). Con la paleta de comandos (Ctrl+Shift+P) ejecute detectores sueltos, herramientas externas y navegue los hallazgos.", "bot");

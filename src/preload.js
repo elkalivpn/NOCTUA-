@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld("noctua", {
   },
   plugins: {
     list: () => ipcRenderer.invoke("plugins:list"),
-    toggle: (id) => ipcRenderer.invoke("plugins:toggle", id)
+    toggle: (id) => ipcRenderer.invoke("plugins:toggle", id),
+    run: (id, cmd, args) => ipcRenderer.invoke("plugins:runCommand", { id, cmd, args }),
+    onToggled: (cb) => ipcRenderer.on("plugin:toggled", (_e, ev) => cb(ev))
   }
 });

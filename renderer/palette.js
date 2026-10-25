@@ -73,7 +73,8 @@ function createRegistry() {
     list() {
       return [...commands.values()].filter((c) => !c.when || c.when());
     },
-    size: () => commands.size
+    size: () => commands.size,
+    unregister(id) { return commands.delete(String(id)); }
   };
 }
 

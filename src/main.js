@@ -191,6 +191,17 @@ ipcMain.handle("tool:yara", (_e, { rules, file }) => runTool("yara", [rules, fil
 ipcMain.handle("plugins:list", () => plugins.list());
 ipcMain.handle("plugins:toggle", (_e, id) => plugins.toggle(id));
 
+/* Permisos explícitos en el renderer (issue #12): el renderer solo construye
+   affordances a partir de la lista (permisos + estado), y el proceso
+   principal re-valida CADA invocación (defensa en profundidad). */
+ipcMain.handle("plugins:runCommand", (_e, pl) => {
+  const payload = pl || {};
+  return plugins.runCommand(String(payload.id), String(payload.cmd), Array.isArray(payload.args) ? payload.args : []);
+});
+plugins.on("plugin:toggled", ({ id, enabled }) => {
+  win?.webContents.send("plugin:toggled", { id, enabled });
+});
+
 /* Caída de un utilityProcess de plugin (issue #6): el proceso principal
    sobrevive y el renderer puede reflejar el estado. */
 plugins.on("plugin:crashed", ({ id }) => {
