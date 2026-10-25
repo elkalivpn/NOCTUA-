@@ -24,9 +24,11 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 ## v0.1 — completado
 - [x] Esqueleto Electron con IPC seguro, editor Monaco, agente IA configurable, análisis básico, puentes rizin/YARA, plugins con permisos, CI, MIT, ARCHITECTURE.md
 
-## v0.4 (siguiente) — Ingeniería inversa y sandbox
-- [ ] Ghidra headless bridge, reglas CAPA, MITRE ATT&CK, VM dedicada con snapshots
-- [ ] gdbserver con inferior en VM (fase 2 del diseño del depurador): depuración sin ejecutar la muestra en el host
+## v0.4 (en diseño — docs/DESIGN-v04.md) — Ingeniería inversa y sandbox
+- [ ] Puente Ghidra headless con export JSON (funciones, xrefs, strings) — issue #8
+- [ ] Reglas CAPA y mapeo MITRE ATT&CK en el contrato de hallazgos (campo mitre opt-in) — issue #9
+- [ ] gdbserver con inferior en VM (fase 2 del diseño del depurador): depuración sin ejecutar la muestra en el host — issue #10
+- [ ] VM dedicada con snapshots: perfil y restauración documentados como responsabilidad del analista
 
 ## v0.5 — Orquestación de fuzzing
 - [ ] Integración AFL++ / boofuzz: campañas, cobertura, triaje de crashes
