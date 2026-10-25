@@ -1,9 +1,9 @@
 # NOCTUA — IDE de investigación de seguridad
 
 IDE de escritorio para análisis de seguridad autorizada en Kali Linux.
-Estado actual: **v0.3.2 — paleta de comandos**: flujo vertical de análisis (v0.2), terminal PTY real, árbol de proyectos, depuración interactiva de binarios nativos con breakpoints en el editor (v0.3.1) y paleta de comandos tipo VS Code (Ctrl+Shift+P): ejecutar acciones de análisis, abrir herramientas externas con whitelist fija y navegar los hallazgos. Con esto, v0.3 queda completado; v0.4 (ingeniería inversa y sandbox de VM) es el siguiente bloque.
+Estado actual: **v0.3.3 — plugins aislados en utilityProcess**: flujo vertical de análisis (v0.2), terminal PTY real, árbol de proyectos, depuración interactiva de binarios nativos con breakpoints en el editor (v0.3.1), paleta de comandos tipo VS Code (Ctrl+Shift+P) (v0.3.2) y plugins que se ejecutan cada uno en su propio utilityProcess con permisos validados en ambos extremos (v0.3.3). Con esto, v0.3 queda completado; v0.4 (ingeniería inversa y sandbox de VM) es el siguiente bloque.
 
-## Qué hace hoy (v0.3.2)
+## Qué hace hoy (v0.3.3)
 
 - Depuración interactiva de binarios nativos (GDB/MI): arranque bajo gdb con confirmación explícita, breakpoints con un clic en el margen del editor (Monaco), pausar, reanudar, paso a paso, panel con variables locales, backtrace y consola de depuración, relanzamiento del inferior con un clic. Requiere `gdb`. Advertencia honesta: el inferior se ejecuta con sus privilegios de usuario; la vía segura (gdbserver con inferior en VM) es fase 2 del diseño (docs/DESIGN-debugger.md).
 - Paleta de comandos tipo VS Code (Ctrl+Shift+P, o botón en la barra): búsqueda difusa insensible a acentos sobre un registro de 29 comandos. Ejecuta detectores sueltos o el análisis completo, abre herramientas externas limitadas a una whitelist fija (file, sha256sum, strings, readelf, rabin2) con la salida en la pestaña SALIDA, navega los hallazgos (siguiente/anterior con resaltado) y cubre acciones de fichero, depuración y vista. Ningún comando pasa texto libre a una shell.
@@ -21,7 +21,7 @@ Estado actual: **v0.3.2 — paleta de comandos**: flujo vertical de análisis (v
 - Panel de hallazgos: agrupados por severidad, filtro por fuente, búsqueda, SHA-256 copiable y badge de riesgo agregado.
 - Triaje del agente IA: recibe solo el JSON del análisis y responde en JSON estructurado (riesgo, resumen, comportamiento probable, siguientes pasos, IOC, unknowns). Sin firma YARA explícita no se atribuyen familias.
 - CSP estricta en el renderer: sin scripts inline ni remotos.
-- Sistema de plugins con permisos declarativos, denegados por defecto.
+- Sistema de plugins con permisos declarativos, denegados por defecto; cada plugin se ejecuta en su propio utilityProcess (v0.3.3): si muere o se compromete, el proceso principal sobrevive y sus mensajes se validan contra el manifest, no contra lo que el hijo declare.
 - Agente IA configurable: API de Mistral o modelo local vía Ollama.
 
 ## Qué no hace (honestidad sobre el alcance)
@@ -30,7 +30,8 @@ Estado actual: **v0.3.2 — paleta de comandos**: flujo vertical de análisis (v
 - El depurador no ofrece watchpoints, vista de desensamblado, de memoria ni de hilos: fase 2 del diseño (docs/DESIGN-debugger.md).
 - La paleta de comandos no es un ejecutor arbitrario: las herramientas externas se limitan a la whitelist fija `PALETTE_TOOLS` del proceso principal (argv sin shell, timeout de 60 s, salida acotada a 50 líneas); ampliarla exige código auditado, no configuración.
 - El árbol no muestra todos los directorios de golpe (lazy) ni persiste su estado entre sesiones.
-- La terminal es de sesión única; multi-pestaña y aislamiento en utilityProcess están pospuestos (fase 2 del diseño e issue #6).
+- La terminal es de sesión única; multi-pestaña y aislamiento por utilityProcess siguen pospuestos (fase 2 del diseño de la terminal; el issue #6 de plugins quedó resuelto en v0.3.3).
+- El worker de un plugin ejecuta Node completo: el aislamiento protege el proceso principal (un plugin defectuoso o malicioso no lo arrastra), pero no restringe lo que el propio proceso del plugin hace con los permisos concedidos. Conceda `fs` y `tools` solo a plugins auditados.
 - No "encuentra 0-days": la contribución realista aquí es **orquestación de fuzzing** (AFL++, boofuzz) con triaje y deduplicación de crashes, planificada en v0.5.
 - No es un sustituto de Ghidra, IDA ni Cuckoo: NOCTUA orquesta herramientas maduras, no las reimplementa.
 
@@ -46,7 +47,8 @@ src/main/debugger/           Depurador GDB/MI: mi-parser, controller (máquina d
 src/preload.js              Puente seguro (contextBridge + webUtils)
 src/ai-agent.js             Agente IA: API Mistral u Ollama local
 src/analyze.js              Análisis estático básico (v0.1, testeable)
-src/plugin-loader.js        Cargador de plugins con permisos
+src/plugin-loader.js        Cargador de plugins: fork de utilityProcess y validación de permisos en ambos extremos
+src/utility/plugin-worker.js  Worker de plugins: ctx restringido y RPC de capacidades (uno por plugin)
 renderer/index.html         UI con CSP estricta (sin scripts inline)
 renderer/app.js             Lógica del renderer (apertura compartida de ficheros)
 renderer/tree.js            Árbol de proyectos (módulo independiente, lazy + drag-and-drop)
@@ -58,7 +60,7 @@ renderer/vendor/            Monaco y xterm self-hosted (generados por npm instal
 scripts/postinstall.js      Vendors + rebuild de node-pty (omitible con NOCTUA_SKIP_REBUILD=1)
 scripts/copy-monaco.js      Copia Monaco a renderer/vendor
 scripts/copy-xterm.js       Copia xterm.js a renderer/vendor
-tests/                      node:test: análisis, plugins, terminal (FakePty), árbol, CSP, debugger (FakeMiProcess), paleta
+tests/                      node:test: análisis, plugins, terminal (FakePty), árbol, CSP, debugger (FakeMiProcess), paleta, aislamiento de plugins (fork en bucle)
 ```
 
 ## Instalación en Kali Linux
@@ -118,7 +120,7 @@ module.exports.register = (ctx) => {
 };
 ```
 
-Los permisos (`events`, `commands`, `fs`, `tools`, `ai`) son denegados por defecto; un plugin que excede su declaración se descarta al cargar.
+Los permisos (`events`, `commands`, `fs`, `tools`, `ai`) son denegados por defecto; un plugin que excede su declaración falla al cargar. Desde v0.3.3 cada plugin corre en su propio utilityProcess: las capacidades `fs`/`tools`/`ai` se invocan de forma asíncrona por RPC y solo responden si el proceso principal las concedió con `grant()`.
 
 ## Contribuir
 

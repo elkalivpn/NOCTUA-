@@ -7,11 +7,18 @@
 | Proceso principal (Node.js, confianza total)                  |
 |  - IPC handlers: fs, ai, tools, analyze, plugins, terminal    |
 |  - AIAgent (Mistral API / Ollama local)                        |
-|  - PluginLoader (permisos por manifest)                        |
+|  - PluginLoader (fork utilityProcess por plugin, permisos)                        |
 |  - runAnalysis(): contrato zod, detectores, worker_threads     |
 |  - TerminalManager (PTYs, maxSessions, coalescing 16KiB/16ms)  |
 |  - DebuggerManager (GDB/MI: sesiones, watchdog 10 s, coalesc.) |
 |  - runTool(): spawn de rizin, yara, gdb... (timeout 60 s)      |
++------------------------------+--------------------------------+
+                               | MessagePorts: un utilityProcess por plugin
++------------------------------+--------------------------------+
+| utilityProcess (Node.js, uno por plugin)                      |
+|  - plugin-worker.js: ctx restringido, permisos re-validados   |
+|  - capacidades fs/tools/ai solo por RPC (call/callres)       |
+|  - grant() explícito del proceso principal + timeout          |
 +------------------------------+--------------------------------+
                                | IPC (invoke/send/event, contextIsolation)
 +------------------------------+--------------------------------+
@@ -80,7 +87,7 @@ Principios:
 | Renderer comprometido (XSS en un informe, markdown malicioso) | Sandbox de Chromium, sin Node, API reducida; CSP estricta sin scripts inline ni remotos; salida del agente escapada antes de innerHTML | Eliminar `style-src 'unsafe-inline'` si Monaco lo permite |
 | Terminal usada como canal de ejecución desde el renderer | Sesiones creadas por acción explícita del usuario, maxSessions configurable, sin canal de "ejecutar comando": solo escritura en la PTY abierta; teardown garantizado | utilityProcess en fase 2 (issue #6) |
 | node-pty no compila en el equipo del usuario | optionalDependency + require en try/catch: la app arranca con terminal deshabilitada y aviso; npm run rebuild documentado | CI de smoke con PTY real (opcional) |
-| Plugin malicioso (RCE por diseño) | Permisos declarativos por manifest, denegados por defecto; fallo de permiso = plugin descartado | Aislar plugins en utilityProcess (issue #6) |
+| Plugin malicioso (RCE por diseño) | Permisos declarativos por manifest, validados en ambos extremos; cada plugin en su propio utilityProcess (v0.3.3): un hijo comprometido no escala permisos ni arrastra al proceso principal | API de grant más fina por plugin |
 | Binario analizado ejecuta código | El análisis es estático: lectura de bytes, hashes, entropía; nada se ejecuta. La única ejecución es la depuración, que exige confirmación explícita (R6) | Sandbox de VM dedicada antes de cualquier análisis dinámico (v0.4) |
 | Inferior depurado se ejecuta con los privilegios del analista | Confirmación explícita por sesión (`debugger.confirmStart`, por defecto true), `debugger.enabled` en noctua.json, gdb con `-nx` por defecto, escapado MI (R5), spawn sin shell | gdbserver con inferior en VM (fase 2 del diseño del depurador) |
 | Exfiltración de muestras a la nube | Proveedor Ollama local configurable; Mistral solo recibe el JSON de triaje que el usuario envía al agente | Etiquetado de datos sensibles antes de llamar a la API |
@@ -102,11 +109,24 @@ Principios:
 }
 ```
 
-Permisos: `events`, `commands`, `fs`, `tools`, `ai`. Denegados por defecto; el cargador lanza error si el plugin usa una capacidad no declarada y lo descarta sin afectar al resto.
+Permisos: `events`, `commands`, `fs`, `tools`, `ai`. Denegados por defecto; un plugin que excede su declaración falla al cargar.
+
+Desde v0.3.3 (issue #6) el aislamiento es real:
+
+- Cada plugin se ejecuta en su propio `utilityProcess` (`src/utility/plugin-worker.js`); el loader (`src/plugin-loader.js`) nunca carga código del plugin en el proceso principal.
+- Protocolo plano de mensajería: `init`/`ready` (handshake con timeout), `cmd`/`res` (comandos con CALL_TIMEOUT), `sub`/`emit`/`evt` (eventos), `call`/`callres` (capacidades), `dispose`/`bye` (apagado).
+- Defensa en profundidad: los permisos se comprueban en el loader antes de forkear, dentro del worker antes de cada operación y de nuevo en el loader para cada mensaje que regresa del hijo. Un proceso hijo comprometido que mienta sobre sus permisos no escala (tests/plugin-isolation.test.js).
+- Las capacidades `fs`/`tools`/`ai` no se inyectan como objetos: el ctx expone proxies asíncronos y cada método viaja como RPC; solo responden si el proceso principal concedió la capacidad con `grant(id, cap, api)`.
+- `ctx.bus` se eliminó del contrato: los eventos cruzan el perímetro como mensajes validados.
+- La muerte inesperada de un utilityProcess emite `plugin:crashed` y bloquea sus comandos con `PROCESO_PLUGIN_MUERTO`; el proceso principal sobrevive.
+- Apagado ordenado: `killAll()` (dispose + kill) en `window-all-closed` y `will-quit`.
+- `utilityProcess.fork` exige una ruta real del sistema de ficheros: `src/utility/**` se desempaqueta del asar (`asarUnpack` en package.json).
+
+Límite honesto: el utilityProcess ejecuta Node completo. El aislamiento protege el proceso principal (fallo, cuelgue o compromiso del plugin no lo afectan), pero no restringe lo que el propio proceso del plugin hace dentro de sus permisos concedidos; conceda `fs`/`tools` solo a plugins auditados.
 
 ## Límites de diseño conocidos
 
-- Los plugins se ejecutan hoy en el proceso principal: el modelo de permisos limita la superficie, pero el aislamiento real (utilityProcess) es el issue #6.
+- Los plugins se ejecutan aislados en utilityProcess (v0.3.3), pero el worker corre Node completo: el aislamiento protege el proceso principal, no restringe lo que el propio plugin puede hacer con sus permisos. Conceda fs/tools solo a plugins auditados. El desempaquetado asar del worker está configurado, pero el AppImage no se ha probado en Electron real todavía.
 - La PTY ejecuta con los privilegios del usuario: es una shell real, sin sandboxing. El aislamiento por utilityProcess y perfiles es la fase 2 del diseño de la terminal.
 - El árbol de proyectos no persiste su estado (raíces, expansiones) entre sesiones y carga los hijos por carperta al expandir, nunca de golpe.
 - No existe análisis dinámico: ninguna muestra se ejecuta desde el análisis. La ejecución controlada requiere una VM dedicada y está pospuesta a v0.4 a propósito.

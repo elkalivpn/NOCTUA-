@@ -3,11 +3,12 @@
 Principio de priorización: un único flujo vertical completo antes de ampliar módulos.
 Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos en panel → sugerencia del agente IA**.
 
-## v0.3 — completado (v0.3.2) — Depuración, workspace y paleta
+## v0.3 — completado (v0.3.3) — Depuración, workspace, paleta y plugins aislados
 - [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
 - [x] Backend de depuración GDB/MI con breakpoints reflejados en el editor (v0.3.1) — diseño: docs/DESIGN-debugger.md; máquina de estados, watchdog, locals, backtrace, consola y relanzamiento; tests con FakeMiProcess, CI sin gdb
 - [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
 - [x] Paleta de comandos (Ctrl+Shift+P): registro con búsqueda difusa insensible a acentos, ejecución de detectores sueltos, herramientas externas con whitelist fija y navegación de hallazgos (v0.3.2)
+- [x] Aislamiento de plugins en utilityProcess (issue #6, v0.3.3): worker propio por plugin, protocolo RPC con permisos validados en ambos extremos, grant explícito de capacidades fs/tools/ai, detección de caídas (plugin:crashed) y tests de aislamiento con fork en bucle
 
 ## v0.2 — completado (v0.2.2)
 - [x] Contrato de hallazgos con validación de esquema (zod) — `src/main/analysis/schema.js`
