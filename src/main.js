@@ -8,8 +8,8 @@ const { analyzeBasic } = require("./analyze");
 const { runAnalysis } = require("./main/analysis");
 const { TerminalManager } = require("./main/terminal");
 const { DebuggerManager, buildGdbArgs } = require("./main/debugger/manager");
-const { readHexWindow } = require("./hexdump");
-const { buildReport } = require("./report");
+const { readHexWindow } = require("./main/hexdump");
+const { buildReport } = require("./main/report");
 const { validateResult } = require("./main/analysis/schema");
 
 let win;
