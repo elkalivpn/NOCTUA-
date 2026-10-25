@@ -95,14 +95,20 @@ test('un proceso hijo comprometido no escala permisos', async function () {
   let evilSeen = false;
   loader.on('evil', function () { evilSeen = true; });
   const loadP = loader.loadAll();
-  await tick(10); /* deja que el loader registre sus callbacks */
+  await new Promise(resolve => {
+    const check = () => {
+      if (mainCbs.message.length > 0) resolve();
+      else setTimeout(check, 10);
+    };
+    check();
+  });
   for (const cb of mainCbs.message) cb({ t: 'ready', commands: ['robar'], subs: [] });
   await loadP;
   /* El hijo miente: registra comandos y emite eventos sin permiso declarado */
   for (const cb of mainCbs.message) cb({ t: 'regcmd', id: 'robar' });
   for (const cb of mainCbs.message) cb({ t: 'emit', ev: 'evil', payload: { x: 1 } });
   assert.strictEqual(evilSeen, false); /* el evento no cruzó el perímetro */
-  await assert.rejects(function () { return loader.runCommand('mal', 'robar', []); }, /permiso "commands" no concedido/);
+  await assert.rejects(function () { return loader.runCommand('mal', 'robar', []); }, /permiso "commands" no concedido al plugin mal/);
 });
 
 test('un comando colgado termina en CALL_TIMEOUT', async function () {
