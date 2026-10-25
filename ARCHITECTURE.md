@@ -87,7 +87,7 @@ Principios:
 | Renderer comprometido (XSS en un informe, markdown malicioso) | Sandbox de Chromium, sin Node, API reducida; CSP estricta sin scripts inline ni remotos; salida del agente escapada antes de innerHTML | Eliminar `style-src 'unsafe-inline'` si Monaco lo permite |
 | Terminal usada como canal de ejecución desde el renderer | Sesiones creadas por acción explícita del usuario, maxSessions configurable, sin canal de "ejecutar comando": solo escritura en la PTY abierta; teardown garantizado | utilityProcess en fase 2 (issue #6) |
 | node-pty no compila en el equipo del usuario | optionalDependency + require en try/catch: la app arranca con terminal deshabilitada y aviso; npm run rebuild documentado | CI de smoke con PTY real (opcional) |
-| Plugin malicioso (RCE por diseño) | Permisos declarativos por manifest, validados en ambos extremos; cada plugin en su propio utilityProcess (v0.3.3): un hijo comprometido no escala permisos ni arrastra al proceso principal | API de grant más fina por plugin |
+| Plugin malicioso (RCE por diseño) | Permisos declarativos por manifest, validados en ambos extremos; cada plugin en su propio utilityProcess (v0.3.3): un hijo comprometido no escala permisos ni arrastra al proceso principal; validación de origen y estructura del manifest y permisos aplicados también en el renderer (v0.3.4): la paleta solo expone comandos de plugins habilitados con permiso commands y el proceso principal re-valida cada invocación | API de grant más fina por plugin |
 | Binario analizado ejecuta código | El análisis es estático: lectura de bytes, hashes, entropía; nada se ejecuta. La única ejecución es la depuración, que exige confirmación explícita (R6) | Sandbox de VM dedicada antes de cualquier análisis dinámico (v0.4) |
 | Inferior depurado se ejecuta con los privilegios del analista | Confirmación explícita por sesión (`debugger.confirmStart`, por defecto true), `debugger.enabled` en noctua.json, gdb con `-nx` por defecto, escapado MI (R5), spawn sin shell | gdbserver con inferior en VM (fase 2 del diseño del depurador) |
 | Exfiltración de muestras a la nube | Proveedor Ollama local configurable; Mistral solo recibe el JSON de triaje que el usuario envía al agente | Etiquetado de datos sensibles antes de llamar a la API |
@@ -123,6 +123,13 @@ Desde v0.3.3 (issue #6) el aislamiento es real:
 - `utilityProcess.fork` exige una ruta real del sistema de ficheros: `src/utility/**` se desempaqueta del asar (`asarUnpack` en package.json).
 
 Límite honesto: el utilityProcess ejecuta Node completo. El aislamiento protege el proceso principal (fallo, cuelgue o compromiso del plugin no lo afectan), pero no restringe lo que el propio proceso del plugin hace dentro de sus permisos concedidos; conceda `fs`/`tools` solo a plugins auditados.
+
+Validación de origen y estructura (v0.3.4, issue #12):
+
+- manifest.id debe cumplir el patrón [a-z0-9][a-z0-9-]{0,63}; el directorio del plugin debe llamarse exactamente como su id (lo declarado coincide con lo instalado) y los ids duplicados se rechazan.
+- manifest.main debe ser una ruta relativa terminada en .js, sin componentes de escape: el punto de entrada no puede salir del directorio del plugin.
+- manifest.origin (opcional) es la URL declarada del repositorio del plugin y queda visible en la lista de plugins; sin origen declarado, la UI lo etiqueta como local.
+- Permisos en el renderer (dos capas): la paleta solo registra comandos de plugins habilitados que declaran commands; cada invocación pasa por el IPC plugins:runCommand, re-validado en el proceso principal (permiso, estado, proceso vivo y timeout). El renderer nunca construye affordances para capacidades no concedidas y reacciona a plugin:toggled para refrescar la superficie disponible.
 
 ## Límites de diseño conocidos
 

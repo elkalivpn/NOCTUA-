@@ -3,12 +3,13 @@
 Principio de priorización: un único flujo vertical completo antes de ampliar módulos.
 Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos en panel → sugerencia del agente IA**.
 
-## v0.3 — completado (v0.3.3) — Depuración, workspace, paleta y plugins aislados
+## v0.3 — completado (v0.3.4) — Depuración, workspace, paleta y plugins aislados (hardening)
 - [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
 - [x] Backend de depuración GDB/MI con breakpoints reflejados en el editor (v0.3.1) — diseño: docs/DESIGN-debugger.md; máquina de estados, watchdog, locals, backtrace, consola y relanzamiento; tests con FakeMiProcess, CI sin gdb
 - [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
 - [x] Paleta de comandos (Ctrl+Shift+P): registro con búsqueda difusa insensible a acentos, ejecución de detectores sueltos, herramientas externas con whitelist fija y navegación de hallazgos (v0.3.2)
 - [x] Aislamiento de plugins en utilityProcess (issue #6, v0.3.3): worker propio por plugin, protocolo RPC con permisos validados en ambos extremos, grant explícito de capacidades fs/tools/ai, detección de caídas (plugin:crashed) y tests de aislamiento con fork en bucle
+- [x] Hardening del sandboxing de plugins (issue #12, v0.3.4): validación de origen y estructura del manifest (id estricto, directorio = id, main relativo, origin declarado, duplicados rechazados) y permisos explícitos en el renderer (comandos de plugins en la paleta solo si están habilitados y declaran commands, con re-validación en el proceso principal)
 
 ## v0.2 — completado (v0.2.2)
 - [x] Contrato de hallazgos con validación de esquema (zod) — `src/main/analysis/schema.js`
@@ -29,6 +30,7 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 - [ ] Reglas CAPA y mapeo MITRE ATT&CK en el contrato de hallazgos (campo mitre opt-in) — issue #9
 - [ ] gdbserver con inferior en VM (fase 2 del diseño del depurador): depuración sin ejecutar la muestra en el host — issue #10
 - [ ] VM dedicada con snapshots: perfil y restauración documentados como responsabilidad del analista
+- [ ] Análisis dinámico básico en Docker/Podman: red, syscalls y hashes en runtime como nuevo tipo de finding — issue #11 (diseño: docs/DESIGN-dynamic.md)
 
 ## v0.5 — Orquestación de fuzzing
 - [ ] Integración AFL++ / boofuzz: campañas, cobertura, triaje de crashes
