@@ -6,6 +6,7 @@
 +---------------------------------------------------------------+
 | Proceso principal (Node.js, confianza total)                  |
 |  - IPC handlers: fs, ai, tools, analyze, plugins, terminal    |
+|  - fs:hexWindow y findings:export (v0.3.6, issue #20)         |
 |  - AIAgent (Mistral API / Ollama local)                        |
 |  - PluginLoader (fork utilityProcess por plugin, permisos)                        |
 |  - runAnalysis(): contrato zod, detectores, worker_threads     |
@@ -28,7 +29,8 @@
 |  - Panel de terminal PTY (xterm.js self-hosted)               |
 |  - Depuración (debugger.js: barra, breakpoints, backtrace)    |
 |  - Paleta de comandos (palette.js: registro, búsqueda difusa, overlay) |
-|  - UI: index.html + app.js + tree.js + palette.js + terminal.js + styles  |
+|  - Panel de hallazgos (findings.js: filtros multiselección, contexto hex)|
+|  - UI: index.html + app.js + tree.js + palette.js + findings.js + terminal.js + styles  |
 |  - Acceso exclusivo vía window.noctua (contextBridge)          |
 +---------------------------------------------------------------+
 ```
@@ -46,7 +48,7 @@ Principios:
 
 `default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'`
 
-- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`, `debugger.js`, `palette.js`); ningún script remoto es cargable.
+- `script-src` no incluye `'unsafe-inline'`: todo el JS del renderer vive en ficheros locales (`app.js`, `tree.js`, `terminal.js`, `debugger.js`, `palette.js`, `findings.js`); ningún script remoto es cargable.
 - `blob:` en `script-src`/`worker-src` existe exclusivamente para el proxy de web workers de Monaco.
 - `style-src` mantiene `'unsafe-inline'` porque Monaco y xterm fijan estilos inline en el DOM: es la única relajación de la política.
 - El renderer no hace peticiones de red: `connect-src 'self'`.
@@ -87,6 +89,13 @@ Principios:
 - Estructuras embebidas: JSON validado con JSON.parse (balanceo con manejo de cadenas y escapes; severidad medium), XML heurístico (etiqueta raíz balanceada o prólogo; severidad low, marcado como heurístico) y base64 (decodificador interno sin Buffer; se exigen >= 24 bytes y >= 85% imprimible; severidad low).
 - Contrato: hallazgos con FindingSchema existente y fuente strings; strings.utf16 y strings.embedded amplían el objeto strings del contrato (schema.js). El renderer no cambia: el panel ya agrupa por severidad (incluida info) y filtra por fuente.
 - Mismo detector puro ejecutado en worker_threads: sin nueva superficie de IPC ni de procesos.
+
+## Panel de hallazgos mejorado (v0.3.6, issue #20)
+
+- `renderer/findings.js`: funciones puras (`severityCounts`, `filterFindings`, `locateOffset`) exportadas para `node:test`; el DOM vive en `app.js`, igual que el resto de módulos del renderer. D1: chips de filtro multiselección por severidad (con recuento) y por fuente, contador N/M de hallazgos visibles y búsqueda unificada sobre título, detalle y referencias; un eje con todos los chips activos no filtra y el usuario desactiva chips explícitamente (sin negación vacía).
+- D2: cada hallazgo con offset ofrece ver su contexto en hexadecimal: el IPC `fs:hexWindow` (`src/main/hexdump.js`, `readHexWindow`) devuelve un volcado acotado (256 bytes alrededor del offset) tras validar ruta y offset en el borde; el salto al editor usa `locateOffset` (línea y columna 1-based) y solo se ofrece si el fichero analizado está abierto como texto en el editor. Límites declarados: los offsets son crudos del fichero, no direcciones virtuales (sin desensamblado no hay mapeo a VA), y `locateOffset` es exacto en ASCII/Latin-1 y aproximado en UTF-8 multibyte.
+- D3: `findings:export` construye informes JSON y Markdown (`src/main/report.js`, `buildReport`) con whitelist de formatos y validación del resultado con `AnalysisResultSchema` (`validateResult`) en el borde del IPC. El informe SIEMPRE registra el análisis completo: los filtros del panel son para navegar, no recortan el informe. Higiene Markdown: `|` y saltos de línea escapados en las celdas de las tablas.
+- Superficie de ataque: `fs:hexWindow` no expone bytes que el renderer ya no pudiera leer (`fs:readBinary` ya existía; aquí el volcado es acotado y validado), `findings:export` escribe ficheros solo tras `dialog.showSaveDialog`, y la CSP del renderer no cambia (tests/renderer-csp.test.js en verde).
 
 ## Modelo de amenazas y mitigaciones
 

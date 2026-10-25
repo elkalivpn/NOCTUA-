@@ -3,7 +3,7 @@
 Principio de priorización: un único flujo vertical completo antes de ampliar módulos.
 Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos en panel → sugerencia del agente IA**.
 
-## v0.3 — completado (v0.3.5) — Depuración, workspace, paleta, plugins aislados y strings contextuales
+## v0.3 — completado (v0.3.6) — Depuración, workspace, paleta, plugins aislados, strings contextuales y panel de hallazgos mejorado
 - [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
 - [x] Backend de depuración GDB/MI con breakpoints reflejados en el editor (v0.3.1) — diseño: docs/DESIGN-debugger.md; máquina de estados, watchdog, locals, backtrace, consola y relanzamiento; tests con FakeMiProcess, CI sin gdb
 - [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
@@ -11,6 +11,7 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 - [x] Aislamiento de plugins en utilityProcess (issue #6, v0.3.3): worker propio por plugin, protocolo RPC con permisos validados en ambos extremos, grant explícito de capacidades fs/tools/ai, detección de caídas (plugin:crashed) y tests de aislamiento con fork en bucle
 - [x] Hardening del sandboxing de plugins (issue #12, v0.3.4): validación de origen y estructura del manifest (id estricto, directorio = id, main relativo, origin declarado, duplicados rechazados) y permisos explícitos en el renderer (comandos de plugins en la paleta solo si están habilitados y declaran commands, con re-validación en el proceso principal)
 - [x] Análisis de strings avanzado (issue #15, v0.3.5): extracción ASCII + UTF-16LE, JSON embebido validado con JSON.parse, XML heurístico, base64 decodificado y bloques de contexto con offsets — diseño: docs/DESIGN-strings.md
+- [x] Panel de hallazgos mejorado (issue #20, v0.3.6): chips de filtro multiselección por severidad (con recuento) y fuente, contador N/M de hallazgos visibles, búsqueda unificada, contexto hex alrededor del offset (fs:hexWindow), salto al editor (locateOffset) y exportación de informes JSON/Markdown del análisis completo (findings:export) — diseño: docs/DESIGN-findings-panel.md
 
 ## v0.2 — completado (v0.2.2)
 - [x] Contrato de hallazgos con validación de esquema (zod) — `src/main/analysis/schema.js`
@@ -51,7 +52,7 @@ Criterio acordado: cada paso deja un entregable verificable en el repo antes de 
 - [ ] Empaquetado y distribución: .deb + AppImage validados en Kali con checklist reproducible — issue #17
 - [ ] Abrir en Ghidra/rizin/Wireshark desde el IDE (whitelist fija; complementa el Ghidra headless del issue #8) — issue #18
 - [ ] Sistema de notificaciones: progreso de análisis largos y hallazgos críticos — issue #19
-- [ ] Panel de hallazgos mejorado: navegación al código, filtros avanzados y exportación de informes — issue #20
+- [x] Panel de hallazgos mejorado: navegación al código, filtros avanzados y exportación de informes — issue #20 (v0.3.6)
 - [ ] Documentación completa: instalación, arquitectura, contribución y disclaimer legal — issue #21
 - [ ] Sistema de preferencias: paths de herramientas, agente IA y temas — issue #22
 - [ ] Sistema de actualizaciones: comprobación de versión y actualización manual/automática — issue #23
