@@ -9,7 +9,7 @@
 </head>
 <body>
 <header>
-  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.3.5</span>
+  <span class="logo">NOCTUA</span><span class="sub">GREY HAT IDE v0.3.6</span>
   <span style="margin-left:auto; display:flex; gap:8px;">
     <span class="badge ok">sandbox listo</span>
     <span class="badge" id="provider-badge">cargando…</span>
@@ -51,8 +51,11 @@
       </div>
       <div id="an-progress"><div></div></div>
       <div id="an-filters">
+        <span style="color:#64748b;font-size:11px;">sev:</span>
+        <div id="an-sevchips"></div>
         <span style="color:#64748b;font-size:11px;">fuente:</span>
         <div id="an-chips"></div>
+        <span id="an-count" style="color:#64748b;font-size:11px;">0/0 hallazgos</span>
         <input id="an-search" placeholder="buscar en hallazgos…"/>
       </div>
       <div id="an-list"></div>
@@ -60,6 +63,8 @@
       <div id="explain-box"></div>
       <div id="an-bottom">
         <button id="btn-explain">Explicar hallazgos (agente)</button>
+        <button id="btn-export-json" disabled title="Exporta el análisis COMPLETO: los filtros del panel son para navegar, el informe es el registro">Exportar informe JSON</button>
+        <button id="btn-export-md" disabled title="Exporta el análisis COMPLETO: los filtros del panel son para navegar, el informe es el registro">Exportar informe Markdown</button>
         <span style="color:#64748b;font-size:11px;">el agente recibe solo el JSON del triaje, nunca el binario</span>
       </div>
     </div>
@@ -113,6 +118,8 @@
 <script src="tree.js"></script>
 <script src="debugger.js"></script>
 <script src="palette.js"></script>
+<script src="findings.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
+

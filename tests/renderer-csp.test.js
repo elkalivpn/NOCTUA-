@@ -1,5 +1,5 @@
 "use strict";
-/* Regresión de seguridad del renderer (issues #3, #4 y #5):
+/* Regresión de seguridad del renderer (issues #3, #4, #5 y #20):
    CSP estricta, cero recursos remotos, sin scripts/estilos inline. */
 const test = require("node:test");
 const assert = require("node:assert");
@@ -13,6 +13,7 @@ const termJs = fs.readFileSync(path.join(rendererDir, "terminal.js"), "utf8");
 const treeJs = fs.readFileSync(path.join(rendererDir, "tree.js"), "utf8");
 const dbgJs = fs.readFileSync(path.join(rendererDir, "debugger.js"), "utf8");
 const palJs = fs.readFileSync(path.join(rendererDir, "palette.js"), "utf8");
+const findJs = fs.readFileSync(path.join(rendererDir, "findings.js"), "utf8");
 
 test("CSP estricta declarada en el renderer", () => {
   const m = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/);
@@ -40,7 +41,7 @@ test("sin recursos remotos ni código inline en el renderer", () => {
   assert.ok(!/<script[^>]+src=["']https?:/.test(html), "ningún <script> remoto");
   assert.ok(!/<script(?![^>]*src=)[^>]*>/.test(html), "sin bloques <script> inline");
   assert.ok(!/<style/.test(html), "sin <style> inline");
-  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs + treeJs + dbgJs + palJs), "sin referencias a CDNs");
+  assert.ok(!/jsdelivr|unpkg|cdnjs|googleapis/.test(html + appJs + termJs + treeJs + dbgJs + palJs + findJs), "sin referencias a CDNs");
   assert.match(html, /<link rel="stylesheet" href="styles.css">/);
   assert.ok(fs.existsSync(path.join(rendererDir, "styles.css")), "styles.css debe existir");
 });
@@ -92,3 +93,18 @@ test("vendors generados por postinstall; node-pty opcional y no versionado", () 
 test("la salida del agente se escapa antes de innerHTML (higiene XSS)", () => {
   assert.match(appJs, /function esc\(/);
 });
+
+test("filtros del panel cargados como módulo local (v0.3.6)", () => {
+  assert.match(html, /<script src="findings\.js"><\/script>/, "index.html debe cargar findings.js antes de app.js");
+  assert.ok(!/https?:/.test(findJs), "findings.js no debe referenciar remotos");
+  assert.match(findJs, /function severityCounts/, "findings.js expone el conteo por severidad");
+  assert.match(findJs, /function filterFindings/, "findings.js expone el filtrado puro");
+  assert.match(findJs, /function locateOffset/, "findings.js expone el mapeo offset a línea");
+  assert.match(html, /id="an-sevchips"/, "chips de severidad en el panel");
+  assert.match(html, /id="an-count"/, "contador N/M junto a los filtros");
+  assert.match(html, /id="btn-export-json"/, "botón de exportación JSON");
+  assert.match(html, /id="btn-export-md"/, "botón de exportación Markdown");
+  assert.match(appJs, /exportReport\(/, "app.js implementa la exportación");
+  assert.match(appJs, /api\.findings\.export\(/, "la exportación pasa por el IPC findings:export");
+});
+

@@ -8,6 +8,9 @@ const { analyzeBasic } = require("./analyze");
 const { runAnalysis } = require("./main/analysis");
 const { TerminalManager } = require("./main/terminal");
 const { DebuggerManager, buildGdbArgs } = require("./main/debugger/manager");
+const { readHexWindow } = require("./hexdump");
+const { buildReport } = require("./report");
+const { validateResult } = require("./main/analysis/schema");
 
 let win;
 const config = loadConfig();
@@ -114,6 +117,16 @@ ipcMain.handle("fs:pickDir", async () => {
   return r.canceled ? null : r.filePaths[0];
 });
 
+/* ---------- IPC: contexto hex de un hallazgo (v0.3.6, issue #20, diseño D2) ----------
+   El renderer ya puede leer cualquier fichero vía fs:readBinary; aquí se devuelve
+   un volcado acotado (256 bytes) alrededor del offset, validando la entrada. */
+ipcMain.handle("fs:hexWindow", async (_e, { path: p, offset } = {}) => {
+  if (typeof p !== "string" || !p) throw new Error("fs:hexWindow exige la ruta del fichero");
+  if (!Number.isInteger(offset) || offset < 0) throw new Error("fs:hexWindow exige un offset entero >= 0");
+  const bytes = await fs.readFile(p);
+  return readHexWindow(bytes, offset);
+});
+
 /* ---------- IPC: agente IA ---------- */
 ipcMain.handle("ai:chat", async (_e, { prompt, context }) =>
   agent.complete(prompt, agent.buildContext(context)));
@@ -129,6 +142,21 @@ ipcMain.handle("analyze:run", async (_e, p, opts) =>
     onProgress: (s) => win?.webContents.send("analyze:progress", s)
   }));
 ipcMain.handle("analyze:basic", (_e, filePath) => analyzeBasic(filePath));
+
+/* ---------- IPC: exportación de informes (v0.3.6, issue #20, diseño D3) ----------
+   Validación en el borde: formato con whitelist {json, md} y resultado con el
+   contrato AnalysisResultSchema ANTES de construir el informe. El informe
+   SIEMPRE contiene el análisis completo; los filtros del panel no se aplican. */
+ipcMain.handle("findings:export", async (_e, { format, result } = {}) => {
+  if (format !== "json" && format !== "md") throw new Error("formato de informe no soportado (whitelist): " + format);
+  const valid = validateResult(result);
+  const ext = format === "json" ? "json" : "md";
+  const base = String(valid.file.path).split(/[\\/]/).pop().replace(/\.[^.]*$/, "") || "analisis";
+  const r = await dialog.showSaveDialog(win, { defaultPath: "informe-" + base + "." + ext });
+  if (r.canceled || !r.filePath) return { canceled: true };
+  await fs.writeFile(r.filePath, buildReport(format, valid), "utf8");
+  return { canceled: false, path: r.filePath };
+});
 
 /* ---------- IPC: terminal (issue #3) ---------- */
 ipcMain.handle("terminal:create", async (_e, opts = {}) => terminal.create(opts));
@@ -220,3 +248,4 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 app.on("will-quit", () => { terminal.killAll(); debuggerManager.killAll(); plugins.killAll(); });
+

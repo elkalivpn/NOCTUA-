@@ -100,6 +100,13 @@ header { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0
 #an-bottom { border-top: 1px solid #1c2230; padding: 10px 0 0; display: flex; gap: 8px; align-items: center; }
 #btn-explain { background: #0e7490; color: white; border: none; border-radius: 6px; padding: 7px 14px; font: inherit; font-size: 12px; cursor: pointer; }
 #btn-explain:disabled { opacity: .5; }
+/* v0.3.6 (issue #20): exportación de informes y volcado hex en el detalle */
+#btn-export-json, #btn-export-md { background: none; border: 1px solid #334155; color: #94a3b8; border-radius: 6px; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+#btn-export-json:hover:not(:disabled), #btn-export-md:hover:not(:disabled) { border-color: #0e7490; color: #67e8f9; }
+#btn-export-json:disabled, #btn-export-md:disabled { opacity: .5; cursor: not-allowed; }
+#an-detail .hexdump { margin: 6px 0 0; padding: 8px; border: 1px solid #1c2230; background: #0d1117; border-radius: 6px; color: #94a3b8; font: 11px/1.45 "JetBrains Mono", monospace; overflow-x: auto; white-space: pre; }
+.finding-nav { margin: 6px 6px 0 0; background: none; border: 1px solid #334155; color: #67e8f9; border-radius: 6px; padding: 2px 8px; font: inherit; font-size: 10px; cursor: pointer; }
+.finding-nav:hover { border-color: #0e7490; }
 #explain-box { margin-top: 10px; border: 1px solid #1c2230; background: #0d1117; border-radius: 6px; padding: 10px; font-size: 12px; overflow-y: auto; max-height: 140px; display: none; }
 #an-progress { height: 3px; background: #1c2230; border-radius: 2px; overflow: hidden; margin: 8px 0; }
 #an-progress div { height: 100%; background: #22d3ee; width: 0; transition: width .2s; }
@@ -136,3 +143,4 @@ header { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0
 .pal-item.sel { background: #1e293b; color: #f1f5f9; }
 .pal-empty { padding: 12px 14px; color: #64748b; font-size: 12px; }
 .finding.flash { outline: 2px solid #22d3ee; }
+

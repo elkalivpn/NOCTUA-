@@ -34,7 +34,10 @@ const term = (text, cls) => {
 const api = window.noctua;
 let activeFile = null;
 let lastResult = null;
-let sourceFilter = null;
+/* Estado de filtros del panel (v0.3.6, issue #20, diseño D1): dos ejes de
+   multiselección como conjuntos "llenos = todo activo". La lógica pura de
+   filtrado vive en renderer/findings.js (filterFindings/severityCounts). */
+const filterState = { severities: new Set(), sources: new Set() };
 
 async function refreshProvider(desc) {
   document.getElementById("provider-badge").textContent = desc || await api.ai.describe();
@@ -156,10 +159,14 @@ document.getElementById("btn-analyze").onclick = async () => {
   document.getElementById("an-detail").textContent = "Ejecutando detectores…";
   document.getElementById("explain-box").style.display = "none";
   document.getElementById("btn-explain").disabled = true;
+  document.getElementById("btn-export-json").disabled = true;
+  document.getElementById("btn-export-md").disabled = true;
   try {
     lastResult = await api.analysis.run(activeFile);
     renderAnalysis(lastResult);
     document.getElementById("btn-explain").disabled = false;
+    document.getElementById("btn-export-json").disabled = false;
+    document.getElementById("btn-export-md").disabled = false;
     term("análisis completado: " + lastResult.findings.length + " hallazgos", "ok");
   } catch (e) {
     term("error de análisis: " + e, "err");
@@ -186,17 +193,37 @@ function renderAnalysis(r) {
   document.getElementById("an-risk").innerHTML =
     '<span class="sev ' + risk + '">RIESGO AGREGADO: ' + risk.toUpperCase() + "</span>";
 
+  /* Filtros avanzados (diseño D1): chips de severidad con contador y chips de
+     fuente, ambos multiselección. Conjunto lleno = eje sin filtrar; el usuario
+     desactiva chips explícitamente (sin negación vacía). */
+  filterState.severities = new Set(SEVERITIES);
+  filterState.sources = new Set(r.findings.map((f) => f.source));
+  const sevChips = document.getElementById("an-sevchips");
+  sevChips.innerHTML = "";
+  const counts = severityCounts(r.findings);
+  for (const s of SEVERITIES) {
+    const c = document.createElement("button");
+    c.className = "chip on";
+    c.textContent = s + " (" + counts[s] + ")";
+    c.onclick = () => {
+      if (filterState.severities.has(s)) filterState.severities.delete(s);
+      else filterState.severities.add(s);
+      c.classList.toggle("on", filterState.severities.has(s));
+      renderFindings(r);
+    };
+    sevChips.appendChild(c);
+  }
   const sources = [...new Set(r.findings.map((f) => f.source))];
   const chips = document.getElementById("an-chips");
   chips.innerHTML = "";
-  sourceFilter = null;
   for (const s of sources) {
     const c = document.createElement("button");
-    c.className = "chip";
+    c.className = "chip on";
     c.textContent = s;
     c.onclick = () => {
-      sourceFilter = sourceFilter === s ? null : s;
-      [...chips.children].forEach((x) => x.classList.toggle("on", x.textContent === sourceFilter));
+      if (filterState.sources.has(s)) filterState.sources.delete(s);
+      else filterState.sources.add(s);
+      c.classList.toggle("on", filterState.sources.has(s));
       renderFindings(r);
     };
     chips.appendChild(c);
@@ -207,12 +234,16 @@ function renderAnalysis(r) {
 
 function renderFindings(r) {
   navIndex = -1; // la navegación de hallazgos (paleta) se reinicia con cada render
-  const q = document.getElementById("an-search").value.toLowerCase();
   const list = document.getElementById("an-list");
   list.innerHTML = "";
-  const filtered = r.findings.filter((f) =>
-    (!sourceFilter || f.source === sourceFilter) &&
-    (!q || (f.title + " " + f.detail + " " + f.refs.join(" ")).toLowerCase().includes(q)));
+  /* Filtrado puro de renderer/findings.js: severidades, fuentes y búsqueda
+     (título + detalle + refs). El contador N/M refleja el filtro actual. */
+  const filtered = filterFindings(r.findings, {
+    severities: filterState.severities,
+    sources: filterState.sources,
+    query: document.getElementById("an-search").value
+  });
+  document.getElementById("an-count").textContent = filtered.length + "/" + r.findings.length + " hallazgos";
 
   const groups = ["critical", "high", "medium", "low", "info"];
   for (const g of groups) {
@@ -249,12 +280,76 @@ function renderFinding(f) {
   meta.className = "meta";
   meta.textContent = "id: " + f.id + " · source: " + f.source + (f.refs.length ? " · refs: " + f.refs.slice(0, 4).join(", ") : "");
   d.appendChild(t); d.appendChild(det); d.appendChild(meta);
+  /* Navegación al código (diseño D2): solo los hallazgos con offset conocen
+     una localización concreta; los agregados (conjuntos) no muestran botón. */
+  if (typeof f.offset === "number") {
+    const btn = document.createElement("button");
+    btn.className = "finding-nav";
+    btn.textContent = "ver @0x" + f.offset.toString(16);
+    btn.title = "volcado hex de 256 bytes alrededor del offset (crudo del fichero, no una dirección virtual)";
+    btn.onclick = (ev) => { ev.stopPropagation(); showOffsetContext(f); };
+    d.appendChild(btn);
+  }
   d.onclick = () => {
     document.getElementById("an-detail").textContent =
       f.title + " — " + f.detail + " | referencias: " + (f.refs.join(", ") || "ninguna");
   };
   return d;
 }
+
+/* Carga el volcado hex alrededor del offset del hallazgo en el panel de
+   detalle (api.fs.hexWindow). Si el fichero analizado está abierto como texto
+   en Monaco, ofrece "ir en el editor": exacto para ASCII/Latin-1, aproximado
+   para UTF-8 multibyte (límite declarado en el diseño D2). */
+async function showOffsetContext(f) {
+  if (!lastResult) return;
+  const detail = document.getElementById("an-detail");
+  detail.textContent = "cargando contexto hex @0x" + f.offset.toString(16) + "…";
+  try {
+    const w = await api.fs.hexWindow(lastResult.file.path, f.offset);
+    detail.textContent = "";
+    const head = document.createElement("div");
+    head.textContent = f.title + " — offset 0x" + f.offset.toString(16) +
+      " (crudo del fichero, no una dirección virtual)";
+    const pre = document.createElement("pre");
+    pre.className = "hexdump";
+    pre.textContent = w.hex;
+    detail.appendChild(head);
+    detail.appendChild(pre);
+    if (activeFile === lastResult.file.path && window.editor) {
+      const loc = locateOffset(window.editor.getValue(), f.offset);
+      const btn = document.createElement("button");
+      btn.className = "finding-nav";
+      btn.textContent = "ir en el editor (línea " + loc.line + ")";
+      btn.title = "aproximado para UTF-8 multibyte: los índices JS cuentan unidades UTF-16, no bytes";
+      btn.onclick = () => {
+        document.getElementById("analysis").classList.remove("open");
+        window.editor.revealLineInCenter(loc.line);
+        window.editor.setPosition({ lineNumber: loc.line, column: loc.column });
+        window.editor.focus();
+      };
+      detail.appendChild(btn);
+    }
+  } catch (e) {
+    detail.textContent = "error al leer el contexto hex: " + e;
+  }
+}
+
+/* Exportación de informes (diseño D3): SIEMPRE el resultado completo del
+   análisis; los filtros del panel son para navegar, el informe es el registro. */
+async function exportReport(format) {
+  if (!lastResult) return term("ejecute primero un análisis", "err");
+  term("[export] generando informe " + format.toUpperCase() + " del análisis completo…", "info");
+  try {
+    const r = await api.findings.export(format, lastResult);
+    if (r.canceled) return term("[export] cancelado por el usuario", "info");
+    term("informe guardado: " + r.path, "ok");
+  } catch (e) {
+    term("error al exportar el informe: " + e, "err");
+  }
+}
+document.getElementById("btn-export-json").onclick = () => exportReport("json");
+document.getElementById("btn-export-md").onclick = () => exportReport("md");
 
 /* ---------- Explicación del agente (prompt de triaje) ---------- */
 document.getElementById("btn-explain").onclick = async () => {
@@ -368,10 +463,14 @@ function runDetectors(dets) {
     document.getElementById("an-detail").textContent = "Ejecutando detectores: " + dets.join(", ");
     document.getElementById("explain-box").style.display = "none";
     document.getElementById("btn-explain").disabled = true;
+    document.getElementById("btn-export-json").disabled = true;
+    document.getElementById("btn-export-md").disabled = true;
     try {
       lastResult = await api.analysis.run(activeFile, { detectors: dets });
       renderAnalysis(lastResult);
       document.getElementById("btn-explain").disabled = false;
+      document.getElementById("btn-export-json").disabled = false;
+      document.getElementById("btn-export-md").disabled = false;
       term("análisis [" + dets.join("+") + "]: " + lastResult.findings.length + " hallazgos", "ok");
     } catch (e) {
       term("error de análisis: " + e, "err");
@@ -450,6 +549,8 @@ registry.register({ id: "hv:panel", category: "Hallazgos", title: "abrir panel d
 registry.register({ id: "hv:sha", category: "Hallazgos", title: "copiar SHA-256 del fichero analizado", when: () => !!lastResult, run: () => {
   navigator.clipboard.writeText(lastResult.file.sha256).then(() => term("sha256 copiado", "ok"));
 } });
+registry.register({ id: "hv:export-json", category: "Hallazgos", title: "exportar informe JSON del análisis completo", when: () => !!lastResult, run: () => exportReport("json") });
+registry.register({ id: "hv:export-md", category: "Hallazgos", title: "exportar informe Markdown del análisis completo", when: () => !!lastResult, run: () => exportReport("md") });
 
 /* Depuración */
 registry.register({ id: "dbg:start", category: "Depuración", title: "depurar binario activo (confirmación R6)", run: clickBtn("btn-debug") });
@@ -468,3 +569,4 @@ api.tools.onStream((data) => term("[stream] " + data.split("\n").pop(), "info"))
 refreshProvider().then(loadPlugins);
 api.plugins.onToggled(() => loadPlugins());
 addMsg("Sesión iniciada. Abra una carpeta en el árbol, pulse Analizar para el flujo v0.2, use ＋ TERMINAL o Depurar (v0.3.1). Con la paleta de comandos (Ctrl+Shift+P) ejecute detectores sueltos, herramientas externas y navegue los hallazgos.", "bot");
+
