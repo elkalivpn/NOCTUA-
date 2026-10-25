@@ -8,7 +8,10 @@ const FindingSchema = z.object({
   title: z.string(),
   detail: z.string(),
   source: z.string(),
-  refs: z.array(z.string()).default([])
+  refs: z.array(z.string()).default([]),
+  /* offset crudo opcional (v0.3.6, issue #20): localizacion del hallazgo
+     cuando el detector la conoce (navegacion del panel). NO es una VA. */
+  offset: z.number().int().min(0).optional()
 });
 
 const AnalysisResultSchema = z.object({

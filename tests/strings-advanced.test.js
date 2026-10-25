@@ -121,3 +121,31 @@ test("extractStrings mantiene el contrato previo: array de cadenas", () => {
   assert.ok(Array.isArray(strs));
   assert.deepStrictEqual(strs, ["abcdef"]);
 });
+
+test("offsets crudos: los hallazgos embebidos senalan su posicion (v0.3.6, issue #20)", () => {
+  const json = '{"c2":"http://185.23.4.11/gate.php","sleep":300}';
+  const b64 = encodeB64("hello world from noctua detector");
+  const buf = concatBytes(Z(16), latin1Bytes(json), Z(64), latin1Bytes(b64), Z(8));
+  const res = detectStrings({ buffer: buf });
+  const fj = res.findings.find((x) => x.id === "strings.embedded-json");
+  const fb = res.findings.find((x) => x.id === "strings.base64");
+  const fu = res.findings.find((x) => x.id === "strings.utf16le");
+  assert.ok(fj, "hallazgo JSON presente");
+  assert.strictEqual(fj.offset, 16, "JSON en el offset 16");
+  assert.ok(fb, "hallazgo base64 presente");
+  assert.strictEqual(fb.offset, 16 + json.length + 64, "base64 tras el JSON y el hueco de 64 bytes");
+  assert.ok(!fu || fu.offset === undefined, "los agregados (utf16le) no llevan offset");
+});
+
+test("offsets crudos: el bloque mas denso senala su arranque (v0.3.6, issue #20)", () => {
+  const parts = [];
+  for (let g = 0; g < 3; g++) {
+    for (let s = 0; s < 4; s++) { parts.push(latin1Bytes("config-string-" + (g * 4 + s))); parts.push(Z(2)); }
+    parts.push(Z(100));
+  }
+  const buf = concatBytes.apply(null, parts);
+  const res = detectStrings({ buffer: buf });
+  const fbl = res.findings.find((x) => x.id === "strings.blocks");
+  assert.ok(fbl, "hallazgo de bloques presente");
+  assert.strictEqual(fbl.offset, 0, "el bloque mas denso arranca en el offset 0");
+});
