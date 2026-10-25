@@ -87,7 +87,7 @@ async function runAnalysis(filePath, opts = {}) {
   // Detectores pesados en workers; ligeros inline (funciones puras).
   const wantStrings = !sel || sel.has("strings");
   const [stringsRes, importsRes, yaraRes] = await Promise.all([
-    wantStrings ? runDetectorInWorker("strings", { buffer: buf }) : Promise.resolve({ findings: [], strings: [] }),
+    wantStrings ? runDetectorInWorker("strings", { buffer: buf }) : Promise.resolve({ findings: [], strings: { interesting: [], urls: [], ips: [], utf16: [], embedded: [] } }),
     wantImports ? runDetectorInWorker("imports", { raw: rabinOut.code === 0 ? rabinOut.out : null }) : Promise.resolve({ findings: [], imports: [] }),
     wantYara ? runDetectorInWorker("yara", { raw: yaraOut.code === 0 ? yaraOut.out : null }) : Promise.resolve({ findings: [], yara: [] })
   ]);

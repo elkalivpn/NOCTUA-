@@ -445,4 +445,4 @@ class Preferences {
 // Singleton
 const preferences = new Preferences();
 
-module.exports = { preferences, DEFAULT_PREFERENCES, SCHEMA };
+module.exports = { preferences, DEFAULT_PREFERENCES, SCHEMA, Preferences };
