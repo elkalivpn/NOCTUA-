@@ -22,11 +22,12 @@ function buildPE(opts = {}) {
   buf.write("PE\u0000\u0000", 0x80, "latin1");
   buf.writeUInt16LE(0x8664, 0x84);          // machine x86-64
   buf.writeUInt16LE(nSections, 0x86);      // NumberOfSections
-  buf.writeUInt16LE(0xf0, 0x90);            // SizeOfOptionalHeader
-  buf.writeUInt16LE(0x20b, 0x94);           // PE32+ magic
-  buf.writeUInt16LE(opts.subsystem ?? 3, 0x94 + 0x44);          // CUI
-  buf.writeUInt16LE(opts.dllChar ?? 0x0100, 0x94 + 0x46);      // NX por defecto
-  const table = 0x94 + 0xf0;
+  buf.writeUInt16LE(0xf0, 0x94);            // SizeOfOptionalHeader at peOffset+20
+  const optHeader = 0x80 + 24;             // OptionalHeader offset (0x98)
+  buf.writeUInt16LE(0x20b, optHeader);     // PE32+ magic at 0x98
+  buf.writeUInt16LE(opts.subsystem ?? 3, optHeader + 0x44);     // CUI at 0xDC
+  buf.writeUInt16LE(opts.dllChar ?? 0x0100, optHeader + 0x46); // NX por defecto at 0xDE
+  const table = optHeader + 0xf0;          // Section table at 0x188
   const names = [".text", ".rdata"];
   for (let i = 0; i < nSections; i++) {
     const e = table + i * 40;
