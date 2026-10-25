@@ -80,6 +80,14 @@ Principios:
 - `tool:run` (proceso principal) solo acepta una whitelist fija (`PALETTE_TOOLS`: file, sha256sum, strings -n 8, readelf -h, rabin2 -I, rabin2 -i); argv como array sin shell, timeout de 60 s, salida acotada a 50 líneas en la pestaña SALIDA. Ampliar la whitelist exige modificar código auditado; no es configurable desde el renderer.
 - Subselección de detectores: `analyze:run` acepta una lista `detectors` validada contra `ALL_DETECTORS` (`src/main/analysis/index.js`), con el mismo gating y el mismo contrato de hallazgos que el análisis completo.
 
+## Análisis de strings contextual (v0.3.5, issue #15)
+
+- src/main/analysis/detectors/strings.js: extractor contextual. Dos pasadas de extracción (ASCII >= 5 imprimibles; UTF-16LE en ambas alineaciones); URLs, IPs y sospechosas se computan sobre la unión de ambas.
+- Bloques de contexto: agrupación por proximidad (hueco >= 64 bytes); el hallazgo strings.blocks (severidad info) señala los offsets del bloque más denso. Límite honesto: sin desensamblado, un bloque denso puede ser .rdata, una tabla de errores del compilador o una configuración real; es un indicador de región, no evidencia.
+- Estructuras embebidas: JSON validado con JSON.parse (balanceo con manejo de cadenas y escapes; severidad medium), XML heurístico (etiqueta raíz balanceada o prólogo; severidad low, marcado como heurístico) y base64 (decodificador interno sin Buffer; se exigen >= 24 bytes y >= 85% imprimible; severidad low).
+- Contrato: hallazgos con FindingSchema existente y fuente strings; strings.utf16 y strings.embedded amplían el objeto strings del contrato (schema.js). El renderer no cambia: el panel ya agrupa por severidad (incluida info) y filtra por fuente.
+- Mismo detector puro ejecutado en worker_threads: sin nueva superficie de IPC ni de procesos.
+
 ## Modelo de amenazas y mitigaciones
 
 | Amenaza | Mitigación actual | Trabajo pendiente |

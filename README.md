@@ -1,9 +1,9 @@
 # NOCTUA — IDE de investigación de seguridad
 
 IDE de escritorio para análisis de seguridad autorizada en Kali Linux.
-Estado actual: **v0.3.4 — plugins aislados y endurecidos**: flujo vertical de análisis (v0.2), terminal PTY real, árbol de proyectos, depuración interactiva de binarios nativos con breakpoints en el editor (v0.3.1), paleta de comandos tipo VS Code (Ctrl+Shift+P) (v0.3.2) y plugins que se ejecutan cada uno en su propio utilityProcess con permisos validados en ambos extremos (v0.3.3) y hardening del sandboxing: validación de origen y estructura del manifest y permisos explícitos aplicados también en el renderer (v0.3.4). Con esto, v0.3 queda completado; v0.4 (ingeniería inversa y sandbox de VM) es el siguiente bloque.
+Estado actual: **v0.3.5 — plugins aislados y endurecidos + strings contextuales**: flujo vertical de análisis (v0.2), terminal PTY real, árbol de proyectos, depuración interactiva de binarios nativos con breakpoints en el editor (v0.3.1), paleta de comandos tipo VS Code (Ctrl+Shift+P) (v0.3.2) y plugins que se ejecutan cada uno en su propio utilityProcess con permisos validados en ambos extremos (v0.3.3) y hardening del sandboxing: validación de origen y estructura del manifest y permisos explícitos aplicados también en el renderer (v0.3.4). Con esto, v0.3 queda completado; v0.4 (ingeniería inversa y sandbox de VM) es el siguiente bloque.
 
-## Qué hace hoy (v0.3.4)
+## Qué hace hoy (v0.3.5)
 
 - Depuración interactiva de binarios nativos (GDB/MI): arranque bajo gdb con confirmación explícita, breakpoints con un clic en el margen del editor (Monaco), pausar, reanudar, paso a paso, panel con variables locales, backtrace y consola de depuración, relanzamiento del inferior con un clic. Requiere `gdb`. Advertencia honesta: el inferior se ejecuta con sus privilegios de usuario; la vía segura (gdbserver con inferior en VM) es fase 2 del diseño (docs/DESIGN-debugger.md).
 - Paleta de comandos tipo VS Code (Ctrl+Shift+P, o botón en la barra): búsqueda difusa insensible a acentos sobre un registro de 29 comandos. Ejecuta detectores sueltos o el análisis completo, abre herramientas externas limitadas a una whitelist fija (file, sha256sum, strings, readelf, rabin2) con la salida en la pestaña SALIDA, navega los hallazgos (siguiente/anterior con resaltado) y cubre acciones de fichero, depuración y vista. Ningún comando pasa texto libre a una shell.
@@ -14,7 +14,7 @@ Estado actual: **v0.3.4 — plugins aislados y endurecidos**: flujo vertical de 
   - formato PE/ELF/script/ZIP, secciones PE, hashes SHA-256/MD5;
   - entropía global y por sección (umbral 7.5 → indicador de packer/cifrado);
   - imports categorizados por taxonomía: injection, keylogging, persistence, anti-debug, network, crypto (requiere rabin2);
-  - strings: URLs, IPs y cadenas sospechosas;
+  - strings contextuales (v0.3.5): URLs, IPs y cadenas sospechosas en ASCII y UTF-16LE, JSON embebido validado con JSON.parse, XML embebido (heurístico), blobs base64 decodificados y bloques de contexto con offsets (dónde se concentran las cadenas);
   - reglas YARA (hallazgo high solo con firma explícita);
   - mitigaciones: ASLR/DEP/CFG en PE, canary en ELF.
 - Detectores pesados en `worker_threads` con progreso por etapas: la UI no se bloquea.
@@ -60,7 +60,7 @@ renderer/vendor/            Monaco y xterm self-hosted (generados por npm instal
 scripts/postinstall.js      Vendors + rebuild de node-pty (omitible con NOCTUA_SKIP_REBUILD=1)
 scripts/copy-monaco.js      Copia Monaco a renderer/vendor
 scripts/copy-xterm.js       Copia xterm.js a renderer/vendor
-tests/                      node:test: análisis, plugins, terminal (FakePty), árbol, CSP, debugger (FakeMiProcess), paleta, aislamiento de plugins (fork en bucle)
+tests/                      node:test: análisis, plugins, terminal (FakePty), árbol, CSP, debugger (FakeMiProcess), paleta, aislamiento de plugins (fork en bucle), strings contextuales
 ```
 
 ## Instalación en Kali Linux

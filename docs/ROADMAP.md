@@ -3,13 +3,14 @@
 Principio de priorización: un único flujo vertical completo antes de ampliar módulos.
 Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos en panel → sugerencia del agente IA**.
 
-## v0.3 — completado (v0.3.4) — Depuración, workspace, paleta y plugins aislados (hardening)
+## v0.3 — completado (v0.3.5) — Depuración, workspace, paleta, plugins aislados y strings contextuales
 - [x] Documento de diseño del debugger: docs/DESIGN-debugger.md — GDB/MI elegido sobre rzpipe por eventos push asíncronos y gdbserver (issue #2)
 - [x] Backend de depuración GDB/MI con breakpoints reflejados en el editor (v0.3.1) — diseño: docs/DESIGN-debugger.md; máquina de estados, watchdog, locals, backtrace, consola y relanzamiento; tests con FakeMiProcess, CI sin gdb
 - [x] Árbol de proyectos: lazy loading, iconos por tipo, click abre en Monaco y drag-and-drop en ambos sentidos (v0.3.0)
 - [x] Paleta de comandos (Ctrl+Shift+P): registro con búsqueda difusa insensible a acentos, ejecución de detectores sueltos, herramientas externas con whitelist fija y navegación de hallazgos (v0.3.2)
 - [x] Aislamiento de plugins en utilityProcess (issue #6, v0.3.3): worker propio por plugin, protocolo RPC con permisos validados en ambos extremos, grant explícito de capacidades fs/tools/ai, detección de caídas (plugin:crashed) y tests de aislamiento con fork en bucle
 - [x] Hardening del sandboxing de plugins (issue #12, v0.3.4): validación de origen y estructura del manifest (id estricto, directorio = id, main relativo, origin declarado, duplicados rechazados) y permisos explícitos en el renderer (comandos de plugins en la paleta solo si están habilitados y declaran commands, con re-validación en el proceso principal)
+- [x] Análisis de strings avanzado (issue #15, v0.3.5): extracción ASCII + UTF-16LE, JSON embebido validado con JSON.parse, XML heurístico, base64 decodificado y bloques de contexto con offsets — diseño: docs/DESIGN-strings.md
 
 ## v0.2 — completado (v0.2.2)
 - [x] Contrato de hallazgos con validación de esquema (zod) — `src/main/analysis/schema.js`
@@ -38,6 +39,24 @@ Flujo vertical objetivo: **abrir binario → análisis estático → hallazgos e
 
 ## v1.0 — Distribución Kali Linux
 - [ ] AppImage + .deb firmado (desde CI), detección de herramientas del sistema, documentación de despliegue seguro
+
+## Backlog ampliado (octubre 2026, issues #13–#25)
+
+Criterio acordado: cada paso deja un entregable verificable en el repo antes de pasar al siguiente; en los módulos mayores, diseño publicado antes de código.
+
+- [ ] Tests E2E del flujo completo (abrir → analizar → hallazgos → explicación del agente) — issue #13
+- [ ] Generación de esqueletos de exploits desde un finding (placeholders para payload y target; diseño obligatorio antes de codificar) — issue #14
+- [x] Análisis de strings avanzado: extracción contextual (v0.3.5) — issue #15
+- [ ] Orquestación de fuzzing AFL++/boofuzz con crashes como hallazgos critical con stack trace (diseño obligatorio) — issue #16
+- [ ] Empaquetado y distribución: .deb + AppImage validados en Kali con checklist reproducible — issue #17
+- [ ] Abrir en Ghidra/rizin/Wireshark desde el IDE (whitelist fija; complementa el Ghidra headless del issue #8) — issue #18
+- [ ] Sistema de notificaciones: progreso de análisis largos y hallazgos críticos — issue #19
+- [ ] Panel de hallazgos mejorado: navegación al código, filtros avanzados y exportación de informes — issue #20
+- [ ] Documentación completa: instalación, arquitectura, contribución y disclaimer legal — issue #21
+- [ ] Sistema de preferencias: paths de herramientas, agente IA y temas — issue #22
+- [ ] Sistema de actualizaciones: comprobación de versión y actualización manual/automática — issue #23
+- [ ] Sistema de backups: autosave del estado de trabajo y restauración de sesiones — issue #24
+- [ ] Sistema de logging estructurado: niveles, filtros y exportación — issue #25
 
 ## Fuera de alcance declarado
 - Reimplementar desensambladores, motores de firmas o emuladores: NOCTUA orquesta herramientas maduras.
